@@ -30,7 +30,7 @@ func ResolveDockerTag(runtime, version string) string {
 	case "dotnet-runtime":
 		return fmt.Sprintf("mcr.microsoft.com/dotnet/runtime:%s", cmp.Or(version, "8.0"))
 	case "rust":
-		return fmt.Sprintf("rust:%s-alpine", cmp.Or(version, "1.75"))
+		return fmt.Sprintf("rust:%s-alpine", cmp.Or(version, "1.85"))
 	case "deno":
 		return fmt.Sprintf("denoland/deno:%s", cmp.Or(version, "latest"))
 	case "bun":
