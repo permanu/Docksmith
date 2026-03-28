@@ -236,6 +236,40 @@ func TestAddTini_CopiesBinary(t *testing.T) {
 	}
 }
 
+func TestAddTini_AlpineUsesSbinPath(t *testing.T) {
+	builder := &Stage{Name: "deps", From: "node:22-alpine"}
+	runtime := &Stage{Name: "runtime", From: "node:22-alpine"}
+	addTini(builder, runtime)
+
+	for i := range runtime.Steps {
+		s := &runtime.Steps[i]
+		if s.Type == StepCopyFrom && s.CopyFrom != nil && strings.Contains(s.CopyFrom.Src, "tini") {
+			if s.CopyFrom.Src != "/sbin/tini" {
+				t.Errorf("alpine tini COPY src: got %q, want /sbin/tini", s.CopyFrom.Src)
+			}
+			return
+		}
+	}
+	t.Error("no tini COPY step found in runtime")
+}
+
+func TestAddTini_DebianUsesUsrBinPath(t *testing.T) {
+	builder := &Stage{Name: "deps", From: "node:22-slim"}
+	runtime := &Stage{Name: "runtime", From: "node:22-slim"}
+	addTini(builder, runtime)
+
+	for i := range runtime.Steps {
+		s := &runtime.Steps[i]
+		if s.Type == StepCopyFrom && s.CopyFrom != nil && strings.Contains(s.CopyFrom.Src, "tini") {
+			if s.CopyFrom.Src != "/usr/bin/tini" {
+				t.Errorf("debian tini COPY src: got %q, want /usr/bin/tini", s.CopyFrom.Src)
+			}
+			return
+		}
+	}
+	t.Error("no tini COPY step found in runtime")
+}
+
 func TestWithAptCleanup(t *testing.T) {
 	tests := []struct {
 		name string

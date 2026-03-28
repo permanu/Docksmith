@@ -88,10 +88,13 @@ func healthcheckCmd(runtime string, port int) string {
 // tini reaps zombie processes and forwards signals — critical for Node/Python workloads.
 func addTini(builder, runtime *Stage) {
 	var installCmd string
+	var tiniPath string
 	if strings.Contains(builder.From, "alpine") {
 		installCmd = "apk add --no-cache tini"
+		tiniPath = "/sbin/tini" // Alpine installs tini to /sbin/
 	} else {
 		installCmd = withAptCleanup("apt-get update -qq && apt-get install -y --no-install-recommends tini")
+		tiniPath = "/usr/bin/tini"
 	}
 	builder.Steps = append(builder.Steps, Step{
 		Type: StepRun,
@@ -100,9 +103,9 @@ func addTini(builder, runtime *Stage) {
 	runtime.Steps = append(runtime.Steps,
 		Step{
 			Type:     StepCopyFrom,
-			CopyFrom: &CopyFrom{Stage: builder.Name, Src: "/usr/bin/tini", Dst: "/usr/bin/tini"},
+			CopyFrom: &CopyFrom{Stage: builder.Name, Src: tiniPath, Dst: tiniPath},
 		},
-		Step{Type: StepEntrypoint, Args: []string{"/usr/bin/tini", "--"}},
+		Step{Type: StepEntrypoint, Args: []string{tiniPath, "--"}},
 	)
 }
 
