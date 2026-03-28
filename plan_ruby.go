@@ -43,7 +43,6 @@ func planRuby(fw *Framework) (*BuildPlan, error) {
 					"bundle config set --local without 'development test' && " +
 						"bundle install --jobs 4 --retry 3",
 				},
-				CacheMount: &CacheMount{Target: "/usr/local/bundle"},
 			},
 			{Type: StepCopy, Args: []string{".", "."}},
 		},

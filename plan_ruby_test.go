@@ -78,17 +78,13 @@ func TestPlanRuby_BuilderInstallsGems(t *testing.T) {
 	}
 }
 
-func TestPlanRuby_BuilderHasCacheMount(t *testing.T) {
+func TestPlanRuby_BuilderNoCacheMountOnBundleDir(t *testing.T) {
 	plan := mustPlanRuby(t, railsFramework())
 	builder := plan.Stages[0]
-	found := false
 	for _, step := range builder.Steps {
-		if step.Type == StepRun && step.CacheMount != nil {
-			found = true
+		if step.Type == StepRun && step.CacheMount != nil && step.CacheMount.Target == "/usr/local/bundle" {
+			t.Error("bundle install must NOT use --mount=type=cache on /usr/local/bundle (gems vanish from layer)")
 		}
-	}
-	if !found {
-		t.Error("builder should have a cache mount for gems")
 	}
 }
 
