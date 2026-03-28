@@ -66,7 +66,7 @@ func planPHPLaravel(fw *Framework, phpVer string, port int) (*BuildPlan, error) 
 				"curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer",
 			}},
 			{Type: StepWorkdir, Args: []string{"/app"}},
-			{Type: StepCopy, Args: []string{"composer.json", "composer.lock", "./"}},
+			{Type: StepCopy, Args: []string{"composer.json", "composer.lock*", "./"}},
 			{
 				Type:       StepRun,
 				Args:       []string{"composer install --no-dev --optimize-autoloader --no-scripts"},
@@ -137,7 +137,7 @@ func planPHPComposer(fw *Framework, phpVer string, port int) (*BuildPlan, error)
 				"curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer",
 			}},
 			Step{Type: StepWorkdir, Args: []string{"/var/www/html"}},
-			Step{Type: StepCopy, Args: []string{"composer.json", "composer.lock", "./"}},
+			Step{Type: StepCopy, Args: []string{"composer.json", "composer.lock*", "./"}},
 			Step{
 				Type:       StepRun,
 				Args:       []string{"composer install --no-dev --optimize-autoloader --no-scripts"},

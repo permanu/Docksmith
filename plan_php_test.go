@@ -195,6 +195,34 @@ func TestPlanPHP_DefaultPHPVersion(t *testing.T) {
 	}
 }
 
+func TestPlanPHP_Laravel_ComposerLockGlob(t *testing.T) {
+	plan := mustPlanPHP(t, laravelFramework())
+	builder := plan.Stages[0]
+	for _, step := range builder.Steps {
+		if step.Type == StepCopy {
+			for _, arg := range step.Args {
+				if arg == "composer.lock" {
+					t.Error("COPY should use composer.lock* glob (not exact), to handle missing lockfile")
+				}
+			}
+		}
+	}
+}
+
+func TestPlanPHP_Symfony_ComposerLockGlob(t *testing.T) {
+	plan := mustPlanPHP(t, symfonyFramework())
+	stage := plan.Stages[0]
+	for _, step := range stage.Steps {
+		if step.Type == StepCopy {
+			for _, arg := range step.Args {
+				if arg == "composer.lock" {
+					t.Error("COPY should use composer.lock* glob (not exact), to handle missing lockfile")
+				}
+			}
+		}
+	}
+}
+
 func TestPlanPHP_Laravel_Runtime_HasWwwDataUser(t *testing.T) {
 	plan := mustPlanPHP(t, laravelFramework())
 	runtime := plan.Stages[1]
