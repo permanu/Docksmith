@@ -3,48 +3,15 @@ package docksmith
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"github.com/permanu/docksmith/yamldef"
 )
 
 // LoadFrameworkDefs loads YAML framework definitions from dir.
-// Files that fail to parse are skipped with an error returned after all files
-// are attempted. The caller decides whether partial results are acceptable.
+// Delegates to yamldef.LoadFrameworkDefs.
 func LoadFrameworkDefs(dir string) ([]*FrameworkDef, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("read framework dir %s: %w", dir, err)
-	}
-
-	var defs []*FrameworkDef
-	var errs []string
-	for _, e := range entries {
-		if e.IsDir() || !isYAMLFile(e.Name()) {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("%s: %v", e.Name(), err))
-			continue
-		}
-		var def FrameworkDef
-		if err := yaml.Unmarshal(data, &def); err != nil {
-			errs = append(errs, fmt.Sprintf("%s: %v", e.Name(), err))
-			continue
-		}
-		if def.Name == "" {
-			errs = append(errs, fmt.Sprintf("%s: missing name field", e.Name()))
-			continue
-		}
-		defs = append(defs, &def)
-	}
-
-	if len(errs) > 0 {
-		return defs, fmt.Errorf("framework load errors:\n  %s", strings.Join(errs, "\n  "))
-	}
-	return defs, nil
+	return yamldef.LoadFrameworkDefs(dir)
 }
 
 // LoadAndRegisterFrameworks loads YAML defs from each dir (in order) and
@@ -61,7 +28,7 @@ func LoadAndRegisterFrameworks(dirs ...string) error {
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
 			continue
 		}
-		defs, err := LoadFrameworkDefs(dir)
+		defs, err := yamldef.LoadFrameworkDefs(dir)
 		if err != nil {
 			// partial load — still register what we got, log the error
 			errs = append(errs, err.Error())
@@ -82,21 +49,14 @@ func LoadAndRegisterFrameworks(dirs ...string) error {
 // evalDefAgainstDir runs the detect rules for def against dir.
 // Returns a populated Framework on match, nil otherwise.
 func evalDefAgainstDir(def *FrameworkDef, dir string) *Framework {
-	if !evalDetectRules(dir, def.Detect) {
+	name, port, matched := yamldef.EvalDefAgainstDir(def, dir)
+	if !matched {
 		return nil
 	}
-	port := def.Plan.Port
-	if port == 0 {
-		port = def.Plan.Port
-	}
 	return &Framework{
-		Name: def.Name,
+		Name: name,
 		Port: port,
 	}
-}
-
-func isYAMLFile(name string) bool {
-	return strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml")
 }
 
 // BuildPlanFromDef converts a FrameworkDef into a BuildPlan.
@@ -171,7 +131,7 @@ func buildStep(sd StepDef) (Step, error) {
 		}
 		return s, nil
 	case len(sd.Env) > 0:
-		keys := sortedKeys(sd.Env)
+		keys := yamldef.SortedKeys(sd.Env)
 		for _, k := range keys {
 			return Step{Type: StepEnv, Args: []string{k, sd.Env[k]}}, nil
 		}
