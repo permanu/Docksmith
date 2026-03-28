@@ -347,6 +347,28 @@ func TestPlanNode_StaticRuntime_HasNginxUser(t *testing.T) {
 	t.Error("static runtime should have USER nginx step")
 }
 
+func TestPlanNode_StaticRuntime_CopyUsesAbsolutePath(t *testing.T) {
+	fw := &Framework{
+		Name:           "vite",
+		BuildCommand:   "npm run build",
+		Port:           80,
+		OutputDir:      "dist",
+		NodeVersion:    "22",
+		PackageManager: "npm",
+	}
+	plan := mustPlanNode(t, fw)
+	runtime := plan.Stages[len(plan.Stages)-1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepCopyFrom && s.CopyFrom != nil && s.CopyFrom.Stage == "build" {
+			if s.CopyFrom.Src != "/app/dist" {
+				t.Errorf("static COPY src: got %q, want /app/dist (absolute path)", s.CopyFrom.Src)
+			}
+			return
+		}
+	}
+	t.Error("no COPY --from=build step found in static runtime")
+}
+
 func TestPlanNode_StaticRuntime_HasHealthcheck(t *testing.T) {
 	fw := &Framework{
 		Name:           "vite",

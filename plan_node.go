@@ -84,6 +84,10 @@ func planNode(fw *Framework) (*BuildPlan, error) {
 		if outputDir == "" {
 			outputDir = "dist"
 		}
+		// Use absolute path relative to WORKDIR /app in the build stage.
+		if !strings.HasPrefix(outputDir, "/") {
+			outputDir = "/app/" + outputDir
+		}
 		runtimeStage = Stage{
 			Name: "runtime",
 			From: "nginx:alpine",
