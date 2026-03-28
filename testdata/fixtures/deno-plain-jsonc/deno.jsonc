@@ -1,0 +1,7 @@
+// deno.jsonc — workspace config
+{
+  // tasks
+  "tasks": {
+    "start": "deno run -A mod.ts"
+  }
+}

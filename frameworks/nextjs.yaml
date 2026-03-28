@@ -1,0 +1,97 @@
+name: nextjs
+runtime: node
+priority: 10
+
+detect:
+  any:
+    - file: next.config.js
+    - file: next.config.mjs
+    - file: next.config.ts
+    - file: package.json
+      contains: '"next"'
+
+version:
+  sources:
+    - file: .node-version
+    - file: .nvmrc
+    - json: package.json
+      path: engines.node
+  default: "20"
+
+package_manager:
+  sources:
+    - file: pnpm-lock.yaml
+      value: pnpm
+    - file: yarn.lock
+      value: yarn
+    - file: bun.lockb
+      value: bun
+    - file: bun.lock
+      value: bun
+  default: npm
+
+defaults:
+  install:
+    npm: npm ci
+    pnpm: pnpm install --frozen-lockfile
+    yarn: yarn install --frozen-lockfile
+    bun: bun install --frozen-lockfile
+  build: npm run build
+  start: npm start
+
+plan:
+  port: 3000
+  stages:
+    - name: deps
+      base: node
+      steps:
+        - workdir: /app
+        - copy:
+            - package.json
+            - package-lock.json*
+            - ./
+        - run: "{{install_command}}"
+          cache: /root/.npm
+
+    - name: build
+      from: deps
+      steps:
+        - copy:
+            - "."
+            - "."
+        - run: "{{build_command}}"
+
+    - name: runtime
+      base: node
+      steps:
+        - workdir: /app
+        - copy_from:
+            stage: build
+            src: /app
+            dst: /app
+        - cmd:
+            - "{{start_command}}"
+
+tests:
+  - name: next.config.js present
+    fixture:
+      next.config.js: "/** @type {import('next').NextConfig} */\nmodule.exports = {}"
+      package.json: '{"name":"app","scripts":{"build":"next build","start":"next start"},"dependencies":{"next":"14.0.0","react":"18.0.0"}}'
+    expect:
+      detected: true
+      framework: nextjs
+      port: 3000
+
+  - name: package.json with next dep
+    fixture:
+      package.json: '{"dependencies":{"next":"13.5.0","react":"18.0.0"}}'
+    expect:
+      detected: true
+      framework: nextjs
+      port: 3000
+
+  - name: plain React app, no next
+    fixture:
+      package.json: '{"dependencies":{"react":"18.0.0","react-dom":"18.0.0"}}'
+    expect:
+      detected: false

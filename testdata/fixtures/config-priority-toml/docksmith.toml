@@ -1,0 +1,4 @@
+runtime = "go"
+version = "1.22"
+start = "go run ./cmd/server"
+port = 9000

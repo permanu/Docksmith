@@ -1,0 +1,38 @@
+name: Framework Request
+description: Request detection support for a new framework
+labels: ["enhancement", "framework"]
+body:
+  - type: input
+    id: framework
+    attributes:
+      label: Framework name
+      placeholder: "e.g., Gleam, Zig, Bun + Hono"
+    validations:
+      required: true
+
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime / Language
+      placeholder: "e.g., Erlang, Zig, JavaScript"
+    validations:
+      required: true
+
+  - type: textarea
+    id: detection
+    attributes:
+      label: How to detect this framework
+      description: |
+        What files or patterns identify a project using this framework?
+        (e.g., "gleam.toml in root", "package.json with 'hono' dependency")
+    validations:
+      required: true
+
+  - type: textarea
+    id: build
+    attributes:
+      label: Build and run commands
+      description: |
+        How is this framework typically built and started?
+    validations:
+      required: true

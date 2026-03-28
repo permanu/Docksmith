@@ -1,0 +1,42 @@
+version: 2
+
+builds:
+  - main: ./cmd/docksmith
+    binary: docksmith
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}}
+
+archives:
+  - format: tar.gz
+    name_template: "docksmith_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+brews:
+  - repository:
+      owner: permanu
+      name: homebrew-tap
+    homepage: https://github.com/permanu/docksmith
+    description: "Detect any framework. Generate production Dockerfiles."
+    license: "Apache-2.0"

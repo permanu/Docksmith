@@ -1,0 +1,103 @@
+name: django
+runtime: python
+priority: 10
+
+detect:
+  all:
+    - file: manage.py
+  any:
+    - file: requirements.txt
+    - file: Pipfile
+    - file: pyproject.toml
+
+version:
+  sources:
+    - file: .python-version
+    - file: runtime.txt
+  default: "3.12"
+
+package_manager:
+  sources:
+    - file: poetry.lock
+      value: poetry
+    - file: Pipfile.lock
+      value: pipenv
+    - file: uv.lock
+      value: uv
+  default: pip
+
+defaults:
+  install:
+    pip: "python -m venv /app/.venv && /app/.venv/bin/pip install --no-cache-dir -r requirements.txt"
+    poetry: "python -m venv /app/.venv && /app/.venv/bin/pip install --no-cache-dir poetry && /app/.venv/bin/poetry install --no-interaction --only main"
+    pipenv: "python -m venv /app/.venv && VIRTUAL_ENV=/app/.venv /app/.venv/bin/pip install --no-cache-dir pipenv && VIRTUAL_ENV=/app/.venv pipenv install --deploy"
+    uv: "pip install --no-cache-dir uv && uv sync --frozen --no-dev --no-editable"
+  build: ""
+  start: "gunicorn --bind 0.0.0.0:8000 config.wsgi:application"
+
+plan:
+  port: 8000
+  stages:
+    - name: builder
+      base: python
+      steps:
+        - workdir: /app
+        - run: "apt-get update -qq && apt-get install -y --no-install-recommends build-essential libpq-dev libffi-dev && rm -rf /var/lib/apt/lists/*"
+        - copy:
+            - requirements.txt*
+            - pyproject.toml*
+            - ./
+        - run: "{{install_command}}"
+          cache: /root/.cache/pip
+        - copy:
+            - "."
+            - "."
+
+    - name: runtime
+      base: python
+      steps:
+        - workdir: /app
+        - run: "apt-get update -qq && apt-get install -y --no-install-recommends libpq5 && rm -rf /var/lib/apt/lists/*"
+        - copy_from:
+            stage: builder
+            src: /app/.venv
+            dst: /app/.venv
+        - copy_from:
+            stage: builder
+            src: /app
+            dst: "."
+        - env:
+            PATH: /app/.venv/bin:$PATH
+        - env:
+            PORT: "{{port}}"
+        - expose: "{{port}}"
+        - cmd:
+            - /bin/sh
+            - -c
+            - "{{start_command}}"
+
+tests:
+  - name: manage.py + requirements.txt
+    fixture:
+      manage.py: "#!/usr/bin/env python\nimport os\nimport sys\n"
+      requirements.txt: "Django>=4.2\ngunicorn\n"
+    expect:
+      detected: true
+      framework: django
+      port: 8000
+
+  - name: manage.py + pyproject.toml
+    fixture:
+      manage.py: "#!/usr/bin/env python\n"
+      pyproject.toml: "[tool.poetry.dependencies]\ndjango = \"^4.2\"\n"
+    expect:
+      detected: true
+      framework: django
+      port: 8000
+
+  - name: no manage.py
+    fixture:
+      requirements.txt: "Django>=4.2\n"
+      app.py: "from django.http import HttpResponse\n"
+    expect:
+      detected: false
