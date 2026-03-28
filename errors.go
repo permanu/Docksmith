@@ -1,9 +1,10 @@
 package docksmith
 
-import "errors"
+import "github.com/permanu/docksmith/core"
 
+// Error aliases re-export core sentinel errors for backward compatibility.
 var (
-	ErrNotDetected  = errors.New("no framework detected")
-	ErrInvalidConfig = errors.New("invalid config")
-	ErrInvalidPlan  = errors.New("invalid build plan")
+	ErrNotDetected  = core.ErrNotDetected
+	ErrInvalidConfig = core.ErrInvalidConfig
+	ErrInvalidPlan  = core.ErrInvalidPlan
 )
