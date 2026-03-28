@@ -198,3 +198,36 @@ func TestPlanJava_ExposedPort(t *testing.T) {
 		t.Errorf("expose: got %d, want 8080", plan.Expose)
 	}
 }
+
+func TestPlanJava_Maven_Runtime_HasAppUser(t *testing.T) {
+	plan := mustPlanJava(t, springBootFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepUser && s.Args[0] == "appuser" {
+			return
+		}
+	}
+	t.Error("java maven runtime should have USER appuser step")
+}
+
+func TestPlanJava_Maven_Runtime_HasHealthcheck(t *testing.T) {
+	plan := mustPlanJava(t, springBootFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepHealthcheck {
+			return
+		}
+	}
+	t.Error("java maven runtime should have a HEALTHCHECK step")
+}
+
+func TestPlanJava_Gradle_Runtime_HasAppUser(t *testing.T) {
+	plan := mustPlanJava(t, gradleFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepUser && s.Args[0] == "appuser" {
+			return
+		}
+	}
+	t.Error("java gradle runtime should have USER appuser step")
+}

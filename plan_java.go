@@ -64,6 +64,9 @@ func planJavaMaven(fw *Framework, javaVer string, port int) (*BuildPlan, error) 
 		},
 	}
 
+	addNonRootUser(&runtime, "")
+	addHealthcheck(&runtime, "java", port)
+
 	return &BuildPlan{
 		Framework:    fw.Name,
 		Stages:       []Stage{builder, runtime},
@@ -111,6 +114,9 @@ func planJavaGradle(fw *Framework, javaVer string, port int) (*BuildPlan, error)
 			{Type: StepCmd, Args: []string{"java", "-jar", "app.jar"}},
 		},
 	}
+
+	addNonRootUser(&runtime, "")
+	addHealthcheck(&runtime, "java", port)
 
 	return &BuildPlan{
 		Framework:    fw.Name,
