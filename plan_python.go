@@ -16,13 +16,17 @@ func planPython(fw *Framework) (*BuildPlan, error) {
 	builderSteps := pythonBuilderSteps(fw, pm)
 	runtimeSteps := pythonRuntimeSteps(fw)
 
+	builder := Stage{Name: "builder", From: baseImage, Steps: builderSteps}
+	runtime := Stage{Name: "runtime", From: baseImage, Steps: runtimeSteps}
+
+	addTini(&builder, &runtime)
+	addNonRootUser(&runtime, "")
+	addHealthcheck(&runtime, "python", fw.Port)
+
 	return &BuildPlan{
 		Framework: fw.Name,
 		Expose:    fw.Port,
-		Stages: []Stage{
-			{Name: "builder", From: baseImage, Steps: builderSteps},
-			{Name: "runtime", From: baseImage, Steps: runtimeSteps},
-		},
+		Stages:    []Stage{builder, runtime},
 	}, nil
 }
 

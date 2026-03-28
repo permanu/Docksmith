@@ -252,3 +252,40 @@ func TestPlanPython_PackageManagers(t *testing.T) {
 		})
 	}
 }
+
+func TestPlanPython_Runtime_HasTini(t *testing.T) {
+	plan := mustPlanPython(t, djangoFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepEntrypoint {
+			if strings.Contains(strings.Join(s.Args, " "), "tini") {
+				return
+			}
+		}
+	}
+	t.Error("python runtime should have tini ENTRYPOINT")
+}
+
+func TestPlanPython_Runtime_HasAppUser(t *testing.T) {
+	plan := mustPlanPython(t, djangoFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepUser && s.Args[0] == "appuser" {
+			return
+		}
+	}
+	t.Error("python runtime should have USER appuser step")
+}
+
+func TestPlanPython_Runtime_HasHealthcheck(t *testing.T) {
+	plan := mustPlanPython(t, djangoFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepHealthcheck {
+			if strings.Contains(s.Args[0], "8000") {
+				return
+			}
+		}
+	}
+	t.Error("python runtime should have a healthcheck on port 8000")
+}
