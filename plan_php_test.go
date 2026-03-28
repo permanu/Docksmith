@@ -223,6 +223,42 @@ func TestPlanPHP_Symfony_ComposerLockGlob(t *testing.T) {
 	}
 }
 
+func TestPlanPHP_Laravel_Runtime_ChownsStorageDirs(t *testing.T) {
+	plan := mustPlanPHP(t, laravelFramework())
+	runtime := plan.Stages[1]
+	found := false
+	for _, s := range runtime.Steps {
+		if s.Type == StepRun && len(s.Args) > 0 && strings.Contains(s.Args[0], "chown") &&
+			strings.Contains(s.Args[0], "/app/storage") && strings.Contains(s.Args[0], "/app/bootstrap/cache") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("laravel runtime should chown /app/storage and /app/bootstrap/cache before USER switch")
+	}
+}
+
+func TestPlanPHP_Laravel_Runtime_ChownBeforeUser(t *testing.T) {
+	plan := mustPlanPHP(t, laravelFramework())
+	runtime := plan.Stages[1]
+	chownIdx := -1
+	userIdx := -1
+	for i, s := range runtime.Steps {
+		if s.Type == StepRun && len(s.Args) > 0 && strings.Contains(s.Args[0], "chown") {
+			chownIdx = i
+		}
+		if s.Type == StepUser {
+			userIdx = i
+		}
+	}
+	if chownIdx < 0 || userIdx < 0 {
+		t.Fatalf("missing steps: chown=%d user=%d", chownIdx, userIdx)
+	}
+	if chownIdx >= userIdx {
+		t.Errorf("chown (idx %d) must come before USER (idx %d)", chownIdx, userIdx)
+	}
+}
+
 func TestPlanPHP_Laravel_Runtime_HasWwwDataUser(t *testing.T) {
 	plan := mustPlanPHP(t, laravelFramework())
 	runtime := plan.Stages[1]

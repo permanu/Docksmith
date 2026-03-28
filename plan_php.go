@@ -104,6 +104,12 @@ func planPHPLaravel(fw *Framework, phpVer string, port int) (*BuildPlan, error) 
 		},
 	}
 
+	// Laravel needs writable storage and bootstrap/cache dirs for the non-root user.
+	runtime.Steps = append(runtime.Steps, Step{
+		Type: StepRun,
+		Args: []string{"chown -R www-data:www-data /app/storage /app/bootstrap/cache"},
+	})
+
 	addNonRootUser(&runtime, "www-data")
 	addHealthcheck(&runtime, "php", port)
 
