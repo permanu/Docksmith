@@ -1,4 +1,4 @@
-package docksmith_test
+package registry_test
 
 import (
 	"crypto/sha256"
@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/permanu/docksmith"
+	"github.com/permanu/docksmith/registry"
 )
 
-var sampleIndex = docksmith.RegistryIndex{
+var sampleIndex = registry.Index{
 	Version: 1,
-	Frameworks: map[string]docksmith.RegistryEntry{
+	Frameworks: map[string]registry.Entry{
 		"gleam": {
 			Version:     "1.2.0",
 			Description: "Gleam to Erlang shipment",
@@ -39,7 +39,7 @@ var sampleIndex = docksmith.RegistryIndex{
 	},
 }
 
-func marshalIndex(t *testing.T, idx docksmith.RegistryIndex) []byte {
+func marshalIndex(t *testing.T, idx registry.Index) []byte {
 	t.Helper()
 	data, err := json.Marshal(idx)
 	if err != nil {
@@ -48,7 +48,7 @@ func marshalIndex(t *testing.T, idx docksmith.RegistryIndex) []byte {
 	return data
 }
 
-func TestFetchRegistryIndex_fromServer(t *testing.T) {
+func TestFetchIndex_fromServer(t *testing.T) {
 	payload := marshalIndex(t, sampleIndex)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -60,7 +60,7 @@ func TestFetchRegistryIndex_fromServer(t *testing.T) {
 	cacheDir := t.TempDir()
 	t.Setenv("HOME", cacheDir)
 
-	idx, err := docksmith.FetchRegistryIndex(srv.URL, false)
+	idx, err := registry.FetchIndex(srv.URL, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestFetchRegistryIndex_fromServer(t *testing.T) {
 	}
 }
 
-func TestFetchRegistryIndex_cacheTTL(t *testing.T) {
+func TestFetchIndex_cacheTTL(t *testing.T) {
 	cacheDir := t.TempDir()
 	t.Setenv("HOME", cacheDir)
 
@@ -85,7 +85,7 @@ func TestFetchRegistryIndex_cacheTTL(t *testing.T) {
 	}
 
 	// Fresh cache — should use it without hitting network.
-	idx, err := docksmith.FetchRegistryIndex("http://should-not-be-called", false)
+	idx, err := registry.FetchIndex("http://should-not-be-called", false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestFetchRegistryIndex_cacheTTL(t *testing.T) {
 	}
 }
 
-func TestFetchRegistryIndex_expiredCache(t *testing.T) {
+func TestFetchIndex_expiredCache(t *testing.T) {
 	cacheDir := t.TempDir()
 	t.Setenv("HOME", cacheDir)
 
@@ -112,7 +112,7 @@ func TestFetchRegistryIndex_expiredCache(t *testing.T) {
 	}
 
 	calls := 0
-	fresh := docksmith.RegistryIndex{Version: 2, Frameworks: map[string]docksmith.RegistryEntry{
+	fresh := registry.Index{Version: 2, Frameworks: map[string]registry.Entry{
 		"newfw": {Version: "0.0.1"},
 	}}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -121,7 +121,7 @@ func TestFetchRegistryIndex_expiredCache(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	idx, err := docksmith.FetchRegistryIndex(srv.URL, false)
+	idx, err := registry.FetchIndex(srv.URL, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -133,17 +133,17 @@ func TestFetchRegistryIndex_expiredCache(t *testing.T) {
 	}
 }
 
-func TestFetchRegistryIndex_offline_noCache(t *testing.T) {
+func TestFetchIndex_offline_noCache(t *testing.T) {
 	cacheDir := t.TempDir()
 	t.Setenv("HOME", cacheDir)
 
-	_, err := docksmith.FetchRegistryIndex("http://irrelevant", true)
+	_, err := registry.FetchIndex("http://irrelevant", true)
 	if err == nil {
 		t.Fatal("expected error for offline with no cache")
 	}
 }
 
-func TestFetchRegistryIndex_serverError(t *testing.T) {
+func TestFetchIndex_serverError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -152,14 +152,14 @@ func TestFetchRegistryIndex_serverError(t *testing.T) {
 	cacheDir := t.TempDir()
 	t.Setenv("HOME", cacheDir)
 
-	_, err := docksmith.FetchRegistryIndex(srv.URL, false)
+	_, err := registry.FetchIndex(srv.URL, false)
 	if err == nil {
 		t.Fatal("expected error for server 500")
 	}
 }
 
-func TestSearchRegistry_exactMatch(t *testing.T) {
-	results := docksmith.SearchRegistry(&sampleIndex, "gleam")
+func TestSearch_exactMatch(t *testing.T) {
+	results := registry.Search(&sampleIndex, "gleam")
 	if len(results) != 1 {
 		t.Fatalf("want 1 result, got %d", len(results))
 	}
@@ -168,8 +168,8 @@ func TestSearchRegistry_exactMatch(t *testing.T) {
 	}
 }
 
-func TestSearchRegistry_partialMatch(t *testing.T) {
-	results := docksmith.SearchRegistry(&sampleIndex, "go")
+func TestSearch_partialMatch(t *testing.T) {
+	results := registry.Search(&sampleIndex, "go")
 	// matches htmx-go (name) and htmx-go (runtime=go) and possibly solid's description
 	found := false
 	for _, r := range results {
@@ -182,22 +182,22 @@ func TestSearchRegistry_partialMatch(t *testing.T) {
 	}
 }
 
-func TestSearchRegistry_runtimeMatch(t *testing.T) {
-	results := docksmith.SearchRegistry(&sampleIndex, "node")
+func TestSearch_runtimeMatch(t *testing.T) {
+	results := registry.Search(&sampleIndex, "node")
 	if len(results) != 1 || results[0].Name != "solid" {
 		t.Errorf("expected solid (runtime=node), got %v", results)
 	}
 }
 
-func TestSearchRegistry_noMatch(t *testing.T) {
-	results := docksmith.SearchRegistry(&sampleIndex, "zig")
+func TestSearch_noMatch(t *testing.T) {
+	results := registry.Search(&sampleIndex, "zig")
 	if len(results) != 0 {
 		t.Errorf("want 0 results for 'zig', got %d", len(results))
 	}
 }
 
-func TestSearchRegistry_emptyQuery(t *testing.T) {
-	results := docksmith.SearchRegistry(&sampleIndex, "")
+func TestSearch_emptyQuery(t *testing.T) {
+	results := registry.Search(&sampleIndex, "")
 	if len(results) != len(sampleIndex.Frameworks) {
 		t.Errorf("empty query should return all %d entries, got %d", len(sampleIndex.Frameworks), len(results))
 	}
@@ -217,14 +217,14 @@ func TestInstallFramework_writesFile(t *testing.T) {
 	h := sha256.Sum256([]byte(yamlContent))
 	checksum := hex.EncodeToString(h[:])
 
-	entry := docksmith.RegistryEntry{
+	entry := registry.Entry{
 		Name:    "gleam",
 		Version: "1.2.0",
 		URL:     srv.URL + "/gleam.yaml",
 		SHA256:  checksum,
 	}
 
-	dest, err := docksmith.InstallFramework(entry)
+	dest, err := registry.InstallFramework(entry)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -244,8 +244,8 @@ func TestInstallFramework_writesFile(t *testing.T) {
 }
 
 func TestInstallFramework_noURL(t *testing.T) {
-	entry := docksmith.RegistryEntry{Name: "broken"}
-	_, err := docksmith.InstallFramework(entry)
+	entry := registry.Entry{Name: "broken"}
+	_, err := registry.InstallFramework(entry)
 	if err == nil {
 		t.Fatal("expected error for entry with no URL")
 	}
