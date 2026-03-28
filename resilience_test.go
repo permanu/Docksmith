@@ -1,6 +1,7 @@
 package docksmith
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -310,17 +311,14 @@ func TestDetect_emptyAndBrokenDirs(t *testing.T) {
 		_ = err
 	})
 
-	t.Run("empty dir returns static fallback", func(t *testing.T) {
+	t.Run("empty dir returns ErrNotDetected", func(t *testing.T) {
 		dir := t.TempDir()
-		fw, err := Detect(dir)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+		_, err := Detect(dir)
+		if err == nil {
+			t.Fatal("expected error for empty dir")
 		}
-		if fw == nil {
-			t.Fatal("expected non-nil framework")
-		}
-		if fw.Name != "static" {
-			t.Errorf("expected static fallback, got %q", fw.Name)
+		if !errors.Is(err, ErrNotDetected) {
+			t.Errorf("error = %v, want ErrNotDetected", err)
 		}
 	})
 

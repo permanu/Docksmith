@@ -1,5 +1,40 @@
 package docksmith
 
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// staticFileExtensions are file extensions that indicate actual web-servable content.
+var staticFileExtensions = map[string]bool{
+	".html": true, ".htm": true, ".css": true, ".js": true,
+	".svg": true, ".png": true, ".jpg": true, ".jpeg": true,
+	".gif": true, ".webp": true, ".ico": true, ".json": true,
+	".xml": true, ".woff": true, ".woff2": true, ".ttf": true,
+}
+
+// hasServableContent checks whether a directory contains files that look like
+// a static website (HTML, CSS, JS, images). Returns false for empty dirs or
+// dirs with only non-web files — these should not silently deploy as static.
+func hasServableContent(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) == 0 {
+		return false
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(e.Name()))
+		if staticFileExtensions[ext] {
+			return true
+		}
+	}
+	return false
+}
+
 // NamedDetector pairs a name with a detection function for registry ordering.
 type NamedDetector struct {
 	Name   string
@@ -47,7 +82,14 @@ func DetectWithOptions(dir string, opts DetectOptions) (*Framework, error) {
 		}
 	}
 
-	return &Framework{Name: "static", Port: 80, OutputDir: "."}, nil
+	// Only fall back to static if the directory has actual web-servable content.
+	// An empty dir or dir with only non-web files should error, not silently
+	// deploy nothing behind nginx.
+	if hasServableContent(dir) {
+		return &Framework{Name: "static", Port: 80, OutputDir: "."}, nil
+	}
+
+	return nil, fmt.Errorf("%w: no supported framework found in %s — add a Dockerfile or docksmith.toml to configure manually", ErrNotDetected, dir)
 }
 
 // loadConfigFramework loads the user config and converts it to a Framework.

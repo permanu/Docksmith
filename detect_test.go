@@ -1,6 +1,7 @@
 package docksmith
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,20 +24,42 @@ func TestDetect_Dockerfile(t *testing.T) {
 	}
 }
 
-func TestDetect_EmptyDir_FallsBackToStatic(t *testing.T) {
+func TestDetect_EmptyDir_ReturnsError(t *testing.T) {
 	dir := filepath.Join("testdata", "fixtures", "empty-dir")
+	fw, err := Detect(dir)
+	if err == nil {
+		t.Fatalf("expected error for empty dir, got framework %q", fw.Name)
+	}
+	if !errors.Is(err, ErrNotDetected) {
+		t.Errorf("error = %v, want ErrNotDetected", err)
+	}
+}
+
+func TestDetect_StaticSite_WithHTML(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<h1>hello</h1>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	fw, err := Detect(dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if fw == nil {
-		t.Fatal("got nil, want framework")
-	}
 	if fw.Name != "static" {
 		t.Errorf("Name = %q, want %q", fw.Name, "static")
 	}
-	if fw.Port != 80 {
-		t.Errorf("Port = %d, want 80", fw.Port)
+}
+
+func TestDetect_BinaryOnly_ReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "app.exe"), []byte{0x4d, 0x5a}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fw, err := Detect(dir)
+	if err == nil {
+		t.Fatalf("expected error for binary-only dir, got framework %q", fw.Name)
+	}
+	if !errors.Is(err, ErrNotDetected) {
+		t.Errorf("error = %v, want ErrNotDetected", err)
 	}
 }
 

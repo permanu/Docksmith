@@ -1,6 +1,7 @@
 package docksmith_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -50,18 +51,12 @@ func TestBuild_goStdRoot(t *testing.T) {
 }
 
 func TestBuild_emptyDir(t *testing.T) {
-	dockerfile, fw, err := docksmith.Build("testdata/fixtures/empty-dir")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, _, err := docksmith.Build("testdata/fixtures/empty-dir")
+	if err == nil {
+		t.Fatal("expected error for empty dir, got nil")
 	}
-	if fw == nil || fw.Name != "static" {
-		t.Fatalf("want static framework for empty dir, got %v", fw)
-	}
-	if dockerfile == "" {
-		t.Fatal("expected non-empty Dockerfile for static fallback")
-	}
-	if !strings.Contains(dockerfile, "nginx") {
-		t.Error("static Dockerfile should use nginx")
+	if !errors.Is(err, docksmith.ErrNotDetected) {
+		t.Errorf("error = %v, want ErrNotDetected", err)
 	}
 }
 

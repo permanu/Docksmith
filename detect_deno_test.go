@@ -1,6 +1,7 @@
 package docksmith
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -251,16 +252,14 @@ func TestDetectDeno_FullStack_Plain(t *testing.T) {
 
 func TestDetectDeno_NotDetected_WithoutDenoJson(t *testing.T) {
 	dir := filepath.Join("testdata", "fixtures", "deno-no-json")
-	fw, err := Detect(dir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := Detect(dir)
+	// Without deno.json, Deno should not be detected. Directory has only main.ts
+	// which is not a recognized framework indicator — expect ErrNotDetected.
+	if err == nil {
+		t.Fatal("expected error for dir without deno.json")
 	}
-	if fw == nil {
-		t.Fatal("got nil")
-	}
-	// Should fall back to static — no deno.json present.
-	if fw.Name == "deno" || fw.Name == "deno-fresh" || fw.Name == "deno-oak" {
-		t.Errorf("Name = %q, should not detect Deno without deno.json", fw.Name)
+	if !errors.Is(err, ErrNotDetected) {
+		t.Errorf("error = %v, want ErrNotDetected", err)
 	}
 }
 

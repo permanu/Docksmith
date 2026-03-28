@@ -1,6 +1,7 @@
 package docksmith
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -127,7 +128,7 @@ func runTestCase(tc TestCase) TestResult {
 	}
 
 	fw, detectErr := Detect(dir)
-	if detectErr != nil {
+	if detectErr != nil && !errors.Is(detectErr, ErrNotDetected) {
 		return TestResult{Name: tc.Name, Passed: false, Reason: fmt.Sprintf("detect: %v", detectErr)}
 	}
 	detected := fw != nil && fw.Name != "static"
