@@ -1,6 +1,7 @@
-package docksmith
+package emit
 
 import (
+	"github.com/permanu/docksmith/core"
 	"fmt"
 	"strings"
 )
@@ -8,7 +9,7 @@ import (
 // EmitDockerfile serializes a BuildPlan into a Dockerfile string.
 // It emits BuildKit-enhanced syntax (cache mounts, secret mounts, --link copies).
 // Returns an empty string when the plan has no stages.
-func EmitDockerfile(plan *BuildPlan) string {
+func EmitDockerfile(plan *core.BuildPlan) string {
 	if len(plan.Stages) == 0 {
 		return ""
 	}
@@ -29,9 +30,9 @@ func EmitDockerfile(plan *BuildPlan) string {
 	return b.String()
 }
 
-func writeStageHeader(b *strings.Builder, stage Stage, idx int) {
-	from := sanitizeDockerfileArg(stage.From)
-	name := sanitizeDockerfileArg(stage.Name)
+func writeStageHeader(b *strings.Builder, stage core.Stage, idx int) {
+	from := SanitizeDockerfileArg(stage.From)
+	name := SanitizeDockerfileArg(stage.Name)
 	if idx == 0 && name == "" {
 		fmt.Fprintf(b, "FROM %s\n", from)
 		return
@@ -43,90 +44,90 @@ func writeStageHeader(b *strings.Builder, stage Stage, idx int) {
 	}
 }
 
-func writeStep(b *strings.Builder, step Step) {
+func writeStep(b *strings.Builder, step core.Step) {
 	switch step.Type {
-	case StepWorkdir:
-		fmt.Fprintf(b, "WORKDIR %s\n", sanitizeDockerfileArg(step.Args[0]))
+	case core.StepWorkdir:
+		fmt.Fprintf(b, "WORKDIR %s\n", SanitizeDockerfileArg(step.Args[0]))
 
-	case StepCopy:
-		args := sanitizeArgs(step.Args)
+	case core.StepCopy:
+		args := SanitizeArgs(step.Args)
 		if step.Link {
 			fmt.Fprintf(b, "COPY --link %s\n", strings.Join(args, " "))
 		} else {
 			fmt.Fprintf(b, "COPY %s\n", strings.Join(args, " "))
 		}
 
-	case StepCopyFrom:
+	case core.StepCopyFrom:
 		cf := step.CopyFrom
 		if cf == nil {
 			return
 		}
 		if step.Link {
 			fmt.Fprintf(b, "COPY --from=%s --link %s %s\n",
-				sanitizeDockerfileArg(cf.Stage),
-				sanitizeDockerfileArg(cf.Src),
-				sanitizeDockerfileArg(cf.Dst))
+				SanitizeDockerfileArg(cf.Stage),
+				SanitizeDockerfileArg(cf.Src),
+				SanitizeDockerfileArg(cf.Dst))
 		} else {
 			fmt.Fprintf(b, "COPY --from=%s %s %s\n",
-				sanitizeDockerfileArg(cf.Stage),
-				sanitizeDockerfileArg(cf.Src),
-				sanitizeDockerfileArg(cf.Dst))
+				SanitizeDockerfileArg(cf.Stage),
+				SanitizeDockerfileArg(cf.Src),
+				SanitizeDockerfileArg(cf.Dst))
 		}
 
-	case StepRun:
+	case core.StepRun:
 		writeRun(b, step)
 
-	case StepEnv:
+	case core.StepEnv:
 		if len(step.Args) == 2 {
 			fmt.Fprintf(b, "ENV %s %s\n",
-				sanitizeDockerfileArg(step.Args[0]),
-				sanitizeDockerfileArg(step.Args[1]))
+				SanitizeDockerfileArg(step.Args[0]),
+				SanitizeDockerfileArg(step.Args[1]))
 		}
 
-	case StepArg:
+	case core.StepArg:
 		if len(step.Args) == 1 {
-			fmt.Fprintf(b, "ARG %s\n", sanitizeDockerfileArg(step.Args[0]))
+			fmt.Fprintf(b, "ARG %s\n", SanitizeDockerfileArg(step.Args[0]))
 		} else if len(step.Args) == 2 {
 			fmt.Fprintf(b, "ARG %s=%s\n",
-				sanitizeDockerfileArg(step.Args[0]),
-				sanitizeDockerfileArg(step.Args[1]))
+				SanitizeDockerfileArg(step.Args[0]),
+				SanitizeDockerfileArg(step.Args[1]))
 		}
 
-	case StepExpose:
-		fmt.Fprintf(b, "EXPOSE %s\n", sanitizeDockerfileArg(step.Args[0]))
+	case core.StepExpose:
+		fmt.Fprintf(b, "EXPOSE %s\n", SanitizeDockerfileArg(step.Args[0]))
 
-	case StepCmd:
+	case core.StepCmd:
 		if step.ShellForm {
-			fmt.Fprintf(b, "CMD %s\n", sanitizeDockerfileArg(strings.Join(step.Args, " ")))
+			fmt.Fprintf(b, "CMD %s\n", SanitizeDockerfileArg(strings.Join(step.Args, " ")))
 		} else {
-			fmt.Fprintf(b, "CMD [%s]\n", shellSplit(strings.Join(step.Args, " ")))
+			fmt.Fprintf(b, "CMD [%s]\n", ShellSplit(strings.Join(step.Args, " ")))
 		}
 
-	case StepEntrypoint:
-		fmt.Fprintf(b, "ENTRYPOINT [%s]\n", shellSplit(strings.Join(step.Args, " ")))
+	case core.StepEntrypoint:
+		fmt.Fprintf(b, "ENTRYPOINT [%s]\n", ShellSplit(strings.Join(step.Args, " ")))
 
-	case StepUser:
-		fmt.Fprintf(b, "USER %s\n", sanitizeDockerfileArg(step.Args[0]))
+	case core.StepUser:
+		fmt.Fprintf(b, "USER %s\n", SanitizeDockerfileArg(step.Args[0]))
 
-	case StepHealthcheck:
-		cmd := sanitizeDockerfileArg(strings.Join(step.Args, " "))
+	case core.StepHealthcheck:
+		cmd := SanitizeDockerfileArg(strings.Join(step.Args, " "))
 		fmt.Fprintf(b, "HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD %s\n", cmd)
 	}
 }
 
-func writeRun(b *strings.Builder, step Step) {
+func writeRun(b *strings.Builder, step core.Step) {
 	var mounts []string
 	if step.CacheMount != nil {
 		mounts = append(mounts, fmt.Sprintf("--mount=type=cache,target=%s",
-			sanitizeDockerfileArg(step.CacheMount.Target)))
+			SanitizeDockerfileArg(step.CacheMount.Target)))
 	}
 	if step.SecretMount != nil {
 		mounts = append(mounts, fmt.Sprintf("--mount=type=secret,id=%s,target=%s",
-			sanitizeDockerfileArg(step.SecretMount.ID),
-			sanitizeDockerfileArg(step.SecretMount.Target)))
+			SanitizeDockerfileArg(step.SecretMount.ID),
+			SanitizeDockerfileArg(step.SecretMount.Target)))
 	}
 
-	cmd := sanitizeDockerfileArg(strings.Join(step.Args, " "))
+	cmd := SanitizeDockerfileArg(strings.Join(step.Args, " "))
 	if len(mounts) > 0 {
 		fmt.Fprintf(b, "RUN %s %s\n", strings.Join(mounts, " "), cmd)
 	} else {
@@ -134,19 +135,11 @@ func writeRun(b *strings.Builder, step Step) {
 	}
 }
 
-func sanitizeArgs(args []string) []string {
-	out := make([]string, len(args))
-	for i, a := range args {
-		out[i] = sanitizeDockerfileArg(a)
-	}
-	return out
-}
-
 // planHasExpose returns true if any stage step already emits an EXPOSE instruction.
-func planHasExpose(plan *BuildPlan) bool {
+func planHasExpose(plan *core.BuildPlan) bool {
 	for _, stage := range plan.Stages {
 		for _, step := range stage.Steps {
-			if step.Type == StepExpose {
+			if step.Type == core.StepExpose {
 				return true
 			}
 		}

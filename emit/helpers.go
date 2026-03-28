@@ -1,21 +1,21 @@
-package docksmith
+package emit
 
 import (
 	"fmt"
 	"strings"
 )
 
-// sanitizeDockerfileArg strips newlines and carriage returns to prevent injection
+// SanitizeDockerfileArg strips newlines and carriage returns to prevent injection
 // of additional Dockerfile instructions when user-supplied strings are interpolated.
-func sanitizeDockerfileArg(s string) string {
+func SanitizeDockerfileArg(s string) string {
 	s = strings.ReplaceAll(s, "\x00", "")
 	s = strings.ReplaceAll(s, "\n", " ")
 	s = strings.ReplaceAll(s, "\r", " ")
 	return s
 }
 
-// shellSplit quotes each word of cmd and joins with ", " for use inside a CMD array literal.
-func shellSplit(cmd string) string {
+// ShellSplit quotes each word of cmd and joins with ", " for use inside a CMD array literal.
+func ShellSplit(cmd string) string {
 	parts := strings.Fields(cmd)
 	quoted := make([]string, len(parts))
 	for i, p := range parts {
@@ -24,8 +24,8 @@ func shellSplit(cmd string) string {
 	return strings.Join(quoted, ", ")
 }
 
-// jsonArray converts cmd into a JSON array string suitable for Dockerfile CMD.
-func jsonArray(cmd string) string {
+// JSONArray converts cmd into a JSON array string suitable for Dockerfile CMD.
+func JSONArray(cmd string) string {
 	parts := strings.Fields(cmd)
 	quoted := make([]string, len(parts))
 	for i, p := range parts {
@@ -34,8 +34,8 @@ func jsonArray(cmd string) string {
 	return "[" + strings.Join(quoted, ", ") + "]"
 }
 
-// pmCopyLockfiles returns the COPY instruction for a package manager's manifest and lockfile.
-func pmCopyLockfiles(pm string) string {
+// PMCopyLockfiles returns the COPY instruction for a package manager's manifest and lockfile.
+func PMCopyLockfiles(pm string) string {
 	switch pm {
 	case "pnpm":
 		return "COPY package.json pnpm-lock.yaml* ./\n"
@@ -46,4 +46,13 @@ func pmCopyLockfiles(pm string) string {
 	default:
 		return "COPY package.json package-lock.json* ./\n"
 	}
+}
+
+// SanitizeArgs applies SanitizeDockerfileArg to each element.
+func SanitizeArgs(args []string) []string {
+	out := make([]string, len(args))
+	for i, a := range args {
+		out[i] = SanitizeDockerfileArg(a)
+	}
+	return out
 }

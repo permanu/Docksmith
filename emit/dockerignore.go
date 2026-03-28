@@ -1,4 +1,4 @@
-package docksmith
+package emit
 
 import (
 	"strings"
@@ -20,7 +20,7 @@ var baseIgnorePatterns = []string{
 }
 
 // GenerateDockerignore returns .dockerignore file content tailored to the framework.
-func GenerateDockerignore(fw *Framework) string {
+func GenerateDockerignore(fw *core.Framework) string {
 	patterns := make([]string, len(baseIgnorePatterns))
 	copy(patterns, baseIgnorePatterns)
 	patterns = append(patterns, runtimeIgnorePatterns(fw.Name)...)
