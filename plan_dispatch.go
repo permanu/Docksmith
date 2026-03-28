@@ -1,41 +1,126 @@
 package docksmith
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 // Plan converts a detected Framework into a BuildPlan.
-func Plan(fw *Framework) (*BuildPlan, error) {
+// Options are applied after the plan is built, overriding defaults.
+func Plan(fw *Framework, opts ...PlanOption) (*BuildPlan, error) {
 	if fw == nil {
 		return nil, fmt.Errorf("%w: nil framework", ErrNotDetected)
 	}
+	var (
+		plan *BuildPlan
+		err  error
+	)
 	switch {
-	// Bun must precede Node — bun projects also have package.json.
+	// Bun detectors must run before Node — bun projects also have package.json.
 	case isBunFramework(fw.Name):
-		return planBun(fw)
+		plan, err = planBun(fw)
 	case isDenoFramework(fw.Name):
-		return planDeno(fw)
+		plan, err = planDeno(fw)
 	case isNodeFramework(fw.Name):
-		return planNode(fw)
+		plan, err = planNode(fw)
 	case isPythonFramework(fw.Name):
-		return planPython(fw)
+		plan, err = planPython(fw)
 	case isGoFramework(fw.Name):
-		return planGo(fw)
+		plan, err = planGo(fw)
 	case isRubyFramework(fw.Name):
-		return planRuby(fw)
+		plan, err = planRuby(fw)
 	case isPHPFramework(fw.Name):
-		return planPHP(fw)
+		plan, err = planPHP(fw)
 	case isJavaFramework(fw.Name):
-		return planJava(fw)
+		plan, err = planJava(fw)
 	case isDotnetFramework(fw.Name):
-		return planDotnet(fw)
+		plan, err = planDotnet(fw)
 	case isRustFramework(fw.Name):
-		return planRust(fw)
+		plan, err = planRust(fw)
 	case fw.Name == "elixir-phoenix":
-		return planElixir(fw)
+		plan, err = planElixir(fw)
 	case fw.Name == "static":
-		return planStatic(fw)
+		plan, err = planStatic(fw)
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrNotDetected, fw.Name)
 	}
+	if err != nil {
+		return nil, err
+	}
+	if len(opts) > 0 {
+		applyPlanOverrides(plan, resolvePlanConfig(opts))
+	}
+	return plan, nil
+}
+
+// applyPlanOverrides modifies the last stage of plan based on cfg.
+// The last stage is always the runtime stage across all plan builders.
+func applyPlanOverrides(plan *BuildPlan, cfg *planConfig) {
+	if len(plan.Stages) == 0 {
+		return
+	}
+
+	last := &plan.Stages[len(plan.Stages)-1]
+
+	if cfg.runtimeImage != nil {
+		last.From = *cfg.runtimeImage
+	}
+
+	if cfg.expose != nil {
+		plan.Expose = *cfg.expose
+		replaceOrAddExpose(last, *cfg.expose)
+	}
+
+	if cfg.user != nil {
+		removeSteps(last, StepUser)
+		if *cfg.user != "" {
+			last.Steps = append(last.Steps, Step{Type: StepUser, Args: []string{*cfg.user}})
+		}
+	}
+
+	if cfg.healthcheck != nil {
+		removeSteps(last, StepHealthcheck)
+		if *cfg.healthcheck != "" {
+			last.Steps = append(last.Steps, Step{Type: StepHealthcheck, Args: []string{*cfg.healthcheck}})
+		}
+	}
+
+	if cfg.entrypoint != nil {
+		removeSteps(last, StepEntrypoint)
+		last.Steps = append(last.Steps, Step{Type: StepEntrypoint, Args: cfg.entrypoint})
+	}
+
+	if len(cfg.extraEnv) > 0 {
+		keys := make([]string, 0, len(cfg.extraEnv))
+		for k := range cfg.extraEnv {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			last.Steps = append(last.Steps, Step{Type: StepEnv, Args: []string{k, cfg.extraEnv[k]}})
+		}
+	}
+}
+
+func removeSteps(stage *Stage, t StepType) {
+	out := stage.Steps[:0]
+	for _, s := range stage.Steps {
+		if s.Type != t {
+			out = append(out, s)
+		}
+	}
+	stage.Steps = out
+}
+
+func replaceOrAddExpose(stage *Stage, port int) {
+	portStr := fmt.Sprintf("%d", port)
+	for i, s := range stage.Steps {
+		if s.Type == StepExpose {
+			stage.Steps[i].Args = []string{portStr}
+			return
+		}
+	}
+	stage.Steps = append(stage.Steps, Step{Type: StepExpose, Args: []string{portStr}})
 }
 
 // Bun detectors must run before Node — bun projects also have package.json.
