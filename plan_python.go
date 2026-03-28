@@ -76,7 +76,7 @@ func pythonRuntimeSteps(fw *Framework) []Step {
 		{Type: StepEnv, Args: []string{"PATH", "/app/.venv/bin:$PATH"}},
 		{Type: StepEnv, Args: []string{"PORT", fmt.Sprintf("%d", fw.Port)}},
 		{Type: StepExpose, Args: []string{fmt.Sprintf("%d", fw.Port)}},
-		{Type: StepCmd, Args: []string{"/bin/sh", "-c", startCmd}},
+		{Type: StepCmd, Args: []string{startCmd}, ShellForm: true},
 	}
 	return steps
 }

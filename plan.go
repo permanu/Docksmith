@@ -46,6 +46,7 @@ type Step struct {
 	SecretMount *SecretMount `json:"secret_mount,omitempty"`
 	CopyFrom    *CopyFrom    `json:"copy_from,omitempty"`
 	Link        bool         `json:"link,omitempty"`
+	ShellForm   bool         `json:"shell_form,omitempty"` // emit CMD/ENTRYPOINT as shell-form (supports env-var expansion)
 }
 
 // CacheMount describes a BuildKit cache mount for a RUN step.

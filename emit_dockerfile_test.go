@@ -130,7 +130,8 @@ func TestEmitDockerfile_Python_CMD(t *testing.T) {
 	plan := mustPythonPlan(t)
 	out := EmitDockerfile(plan)
 
-	assertContains(t, out, "CMD [")
+	// Python uses shell-form CMD (not exec-form) to support ${PORT} expansion.
+	assertContains(t, out, "CMD gunicorn")
 }
 
 // Go plan -----------------------------------------------------------------

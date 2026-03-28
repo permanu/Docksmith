@@ -96,7 +96,11 @@ func writeStep(b *strings.Builder, step Step) {
 		fmt.Fprintf(b, "EXPOSE %s\n", sanitizeDockerfileArg(step.Args[0]))
 
 	case StepCmd:
-		fmt.Fprintf(b, "CMD [%s]\n", shellSplit(strings.Join(step.Args, " ")))
+		if step.ShellForm {
+			fmt.Fprintf(b, "CMD %s\n", sanitizeDockerfileArg(strings.Join(step.Args, " ")))
+		} else {
+			fmt.Fprintf(b, "CMD [%s]\n", shellSplit(strings.Join(step.Args, " ")))
+		}
 
 	case StepEntrypoint:
 		fmt.Fprintf(b, "ENTRYPOINT [%s]\n", shellSplit(strings.Join(step.Args, " ")))
