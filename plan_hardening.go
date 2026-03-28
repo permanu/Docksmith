@@ -84,12 +84,18 @@ func healthcheckCmd(runtime string, port int) string {
 	}
 }
 
-// addTini installs tini in the builder via apt and wires it as the runtime ENTRYPOINT.
+// addTini installs tini in the builder and wires it as the runtime ENTRYPOINT.
 // tini reaps zombie processes and forwards signals — critical for Node/Python workloads.
 func addTini(builder, runtime *Stage) {
+	var installCmd string
+	if strings.Contains(builder.From, "alpine") {
+		installCmd = "apk add --no-cache tini"
+	} else {
+		installCmd = withAptCleanup("apt-get update -qq && apt-get install -y --no-install-recommends tini")
+	}
 	builder.Steps = append(builder.Steps, Step{
 		Type: StepRun,
-		Args: []string{withAptCleanup("apt-get update -qq && apt-get install -y --no-install-recommends tini")},
+		Args: []string{installCmd},
 	})
 	runtime.Steps = append(runtime.Steps,
 		Step{
