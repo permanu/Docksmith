@@ -199,6 +199,20 @@ func TestPlanRuby_FrameworkName(t *testing.T) {
 	}
 }
 
+func TestPlanRuby_Runtime_HasBundleBinInPath(t *testing.T) {
+	plan := mustPlanRuby(t, railsFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepEnv && s.Args[0] == "PATH" {
+			if !strings.Contains(s.Args[1], "/usr/local/bundle/bin") {
+				t.Errorf("PATH should include /usr/local/bundle/bin, got: %s", s.Args[1])
+			}
+			return
+		}
+	}
+	t.Error("ruby runtime should have ENV PATH with bundle bin")
+}
+
 func TestPlanRuby_Runtime_HasAppUser(t *testing.T) {
 	plan := mustPlanRuby(t, railsFramework())
 	runtime := plan.Stages[1]

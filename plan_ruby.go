@@ -78,6 +78,7 @@ func planRuby(fw *Framework) (*BuildPlan, error) {
 				CopyFrom: &CopyFrom{Stage: "builder", Src: "/app", Dst: "."},
 				Link:     true,
 			},
+			{Type: StepEnv, Args: []string{"PATH", "/usr/local/bundle/bin:$PATH"}},
 			{Type: StepEnv, Args: []string{"RAILS_ENV", "production"}},
 			{Type: StepEnv, Args: []string{"RAILS_LOG_TO_STDOUT", "true"}},
 			{Type: StepExpose, Args: []string{strconv.Itoa(port)}},
