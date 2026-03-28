@@ -1,0 +1,360 @@
+package docksmith
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+)
+
+// helpers -----------------------------------------------------------------
+
+func mustNodePlan(t *testing.T) *BuildPlan {
+	t.Helper()
+	fw := &Framework{
+		Name:           "nextjs",
+		NodeVersion:    "22",
+		PackageManager: "npm",
+		Port:           3000,
+		StartCommand:   "node server.js",
+	}
+	plan, err := planNode(fw)
+	if err != nil {
+		t.Fatalf("planNode: %v", err)
+	}
+	return plan
+}
+
+func mustPythonPlan(t *testing.T) *BuildPlan {
+	t.Helper()
+	fw := &Framework{
+		Name:          "django",
+		PythonVersion: "3.12",
+		PythonPM:      "pip",
+		Port:          8000,
+		StartCommand:  "gunicorn myapp.wsgi:application",
+	}
+	plan, err := planPython(fw)
+	if err != nil {
+		t.Fatalf("planPython: %v", err)
+	}
+	return plan
+}
+
+func mustGoPlan(t *testing.T) *BuildPlan {
+	t.Helper()
+	fw := &Framework{
+		Name:      "go",
+		GoVersion: "1.26",
+		Port:      8080,
+	}
+	plan, err := planGo(fw)
+	if err != nil {
+		t.Fatalf("planGo: %v", err)
+	}
+	return plan
+}
+
+func mustStaticPlan(t *testing.T) *BuildPlan {
+	t.Helper()
+	fw := &Framework{
+		Name:      "static",
+		OutputDir: "public",
+		Port:      0,
+	}
+	plan, err := planStatic(fw)
+	if err != nil {
+		t.Fatalf("planStatic: %v", err)
+	}
+	return plan
+}
+
+// Node.js plan ------------------------------------------------------------
+
+func TestEmitDockerfile_NodeJS_MultiStage(t *testing.T) {
+	plan := mustNodePlan(t)
+	out := EmitDockerfile(plan)
+
+	// FROM lines
+	assertContains(t, out, "FROM node:22-alpine AS deps")
+	assertContains(t, out, "FROM deps AS build")
+	assertContains(t, out, "FROM node:22-alpine AS runtime")
+
+	// multi-stage structure: at least 3 FROM lines
+	fromCount := strings.Count(out, "FROM ")
+	if fromCount < 3 {
+		t.Errorf("expected ≥3 FROM lines, got %d\nDockerfile:\n%s", fromCount, out)
+	}
+}
+
+func TestEmitDockerfile_NodeJS_CopyFrom(t *testing.T) {
+	plan := mustNodePlan(t)
+	out := EmitDockerfile(plan)
+
+	// runtime stage copies /app from build with --link
+	assertContains(t, out, "COPY --from=build --link /app /app")
+}
+
+func TestEmitDockerfile_NodeJS_CMD(t *testing.T) {
+	plan := mustNodePlan(t)
+	out := EmitDockerfile(plan)
+
+	// CMD must be JSON array form
+	assertContains(t, out, `CMD ["node", "server.js"]`)
+}
+
+func TestEmitDockerfile_NodeJS_CacheMount(t *testing.T) {
+	plan := mustNodePlan(t)
+	out := EmitDockerfile(plan)
+
+	assertContains(t, out, "--mount=type=cache,target=/root/.npm")
+	assertContains(t, out, "npm ci")
+}
+
+// Python plan -------------------------------------------------------------
+
+func TestEmitDockerfile_Python_VenvCopy(t *testing.T) {
+	plan := mustPythonPlan(t)
+	out := EmitDockerfile(plan)
+
+	assertContains(t, out, "COPY --from=builder /app/.venv /app/.venv")
+}
+
+func TestEmitDockerfile_Python_EnvPath(t *testing.T) {
+	plan := mustPythonPlan(t)
+	out := EmitDockerfile(plan)
+
+	assertContains(t, out, "ENV PATH /app/.venv/bin:$PATH")
+}
+
+func TestEmitDockerfile_Python_CMD(t *testing.T) {
+	plan := mustPythonPlan(t)
+	out := EmitDockerfile(plan)
+
+	assertContains(t, out, "CMD [")
+}
+
+// Go plan -----------------------------------------------------------------
+
+func TestEmitDockerfile_Go_CGODisabled(t *testing.T) {
+	plan := mustGoPlan(t)
+	out := EmitDockerfile(plan)
+
+	assertContains(t, out, "CGO_ENABLED=0")
+}
+
+func TestEmitDockerfile_Go_AlpineRuntime(t *testing.T) {
+	plan := mustGoPlan(t)
+	out := EmitDockerfile(plan)
+
+	assertContains(t, out, "FROM alpine:3.21 AS runtime")
+}
+
+func TestEmitDockerfile_Go_BinaryCopy(t *testing.T) {
+	plan := mustGoPlan(t)
+	out := EmitDockerfile(plan)
+
+	assertContains(t, out, "COPY --from=builder /app/app ./app")
+}
+
+// Static plan -------------------------------------------------------------
+
+func TestEmitDockerfile_Static_NginxBase(t *testing.T) {
+	plan := mustStaticPlan(t)
+	out := EmitDockerfile(plan)
+
+	assertContains(t, out, "FROM nginx:alpine AS runtime")
+}
+
+func TestEmitDockerfile_Static_CopyToHtmlRoot(t *testing.T) {
+	plan := mustStaticPlan(t)
+	out := EmitDockerfile(plan)
+
+	assertContains(t, out, "COPY public /usr/share/nginx/html")
+}
+
+// Step type coverage ------------------------------------------------------
+
+func TestEmitDockerfile_StepWorkdir(t *testing.T) {
+	plan := singleStepPlan(Step{Type: StepWorkdir, Args: []string{"/app"}})
+	assertContains(t, EmitDockerfile(plan), "WORKDIR /app")
+}
+
+func TestEmitDockerfile_StepCopy(t *testing.T) {
+	plan := singleStepPlan(Step{Type: StepCopy, Args: []string{"src", "dst"}})
+	assertContains(t, EmitDockerfile(plan), "COPY src dst")
+}
+
+func TestEmitDockerfile_StepCopyWithLink(t *testing.T) {
+	plan := singleStepPlan(Step{Type: StepCopy, Args: []string{"src", "dst"}, Link: true})
+	assertContains(t, EmitDockerfile(plan), "COPY --link src dst")
+}
+
+func TestEmitDockerfile_StepCopyFrom(t *testing.T) {
+	plan := singleStepPlan(Step{
+		Type:     StepCopyFrom,
+		CopyFrom: &CopyFrom{Stage: "build", Src: "/app/bin", Dst: "/usr/local/bin"},
+	})
+	assertContains(t, EmitDockerfile(plan), "COPY --from=build /app/bin /usr/local/bin")
+}
+
+func TestEmitDockerfile_StepCopyFromWithLink(t *testing.T) {
+	plan := singleStepPlan(Step{
+		Type:     StepCopyFrom,
+		CopyFrom: &CopyFrom{Stage: "build", Src: "/app", Dst: "/app"},
+		Link:     true,
+	})
+	assertContains(t, EmitDockerfile(plan), "COPY --from=build --link /app /app")
+}
+
+func TestEmitDockerfile_StepRun(t *testing.T) {
+	plan := singleStepPlan(Step{Type: StepRun, Args: []string{"echo hello"}})
+	assertContains(t, EmitDockerfile(plan), "RUN echo hello")
+}
+
+func TestEmitDockerfile_StepRun_CacheMount(t *testing.T) {
+	plan := singleStepPlan(Step{
+		Type:       StepRun,
+		Args:       []string{"npm ci"},
+		CacheMount: &CacheMount{Target: "/root/.npm"},
+	})
+	out := EmitDockerfile(plan)
+	assertContains(t, out, "RUN --mount=type=cache,target=/root/.npm npm ci")
+}
+
+func TestEmitDockerfile_StepRun_SecretMount(t *testing.T) {
+	plan := singleStepPlan(Step{
+		Type:        StepRun,
+		Args:        []string{"pip install -r requirements.txt"},
+		SecretMount: &SecretMount{ID: "pip-conf", Target: "/root/.pip/pip.conf"},
+	})
+	out := EmitDockerfile(plan)
+	assertContains(t, out, "--mount=type=secret,id=pip-conf,target=/root/.pip/pip.conf")
+}
+
+func TestEmitDockerfile_StepEnv(t *testing.T) {
+	plan := singleStepPlan(Step{Type: StepEnv, Args: []string{"NODE_ENV", "production"}})
+	assertContains(t, EmitDockerfile(plan), "ENV NODE_ENV production")
+}
+
+func TestEmitDockerfile_StepArg(t *testing.T) {
+	plan := singleStepPlan(Step{Type: StepArg, Args: []string{"BUILD_VERSION"}})
+	assertContains(t, EmitDockerfile(plan), "ARG BUILD_VERSION")
+}
+
+func TestEmitDockerfile_StepExpose(t *testing.T) {
+	plan := singleStepPlan(Step{Type: StepExpose, Args: []string{"8080"}})
+	assertContains(t, EmitDockerfile(plan), "EXPOSE 8080")
+}
+
+func TestEmitDockerfile_StepCmd(t *testing.T) {
+	plan := singleStepPlan(Step{Type: StepCmd, Args: []string{"node", "index.js"}})
+	assertContains(t, EmitDockerfile(plan), `CMD ["node", "index.js"]`)
+}
+
+func TestEmitDockerfile_StepEntrypoint(t *testing.T) {
+	plan := singleStepPlan(Step{Type: StepEntrypoint, Args: []string{"/docker-entrypoint.sh"}})
+	assertContains(t, EmitDockerfile(plan), `ENTRYPOINT ["/docker-entrypoint.sh"]`)
+}
+
+func TestEmitDockerfile_StepUser(t *testing.T) {
+	plan := singleStepPlan(Step{Type: StepUser, Args: []string{"nobody"}})
+	assertContains(t, EmitDockerfile(plan), "USER nobody")
+}
+
+func TestEmitDockerfile_StepHealthcheck(t *testing.T) {
+	plan := singleStepPlan(Step{Type: StepHealthcheck, Args: []string{"curl -f http://localhost/health || exit 1"}})
+	out := EmitDockerfile(plan)
+	assertContains(t, out, "HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD curl -f http://localhost/health || exit 1")
+}
+
+// EXPOSE from plan.Expose -------------------------------------------------
+
+func TestEmitDockerfile_ExposeFromPlan(t *testing.T) {
+	plan := mustGoPlan(t)
+	out := EmitDockerfile(plan)
+	assertContains(t, out, "EXPOSE 8080")
+}
+
+// Edge cases --------------------------------------------------------------
+
+func TestEmitDockerfile_EmptyPlan_ReturnsEmpty(t *testing.T) {
+	plan := &BuildPlan{Framework: "go", Expose: 8080}
+	out := EmitDockerfile(plan)
+	if out != "" {
+		t.Errorf("expected empty string for empty plan, got:\n%s", out)
+	}
+}
+
+func TestEmitDockerfile_InjectionSafety_NewlineInArg(t *testing.T) {
+	plan := singleStepPlan(Step{
+		Type: StepRun,
+		Args: []string{"echo hello\nRUN rm -rf /"},
+	})
+	out := EmitDockerfile(plan)
+
+	// Injected newline must be scrubbed — no extra RUN directive after sanitization
+	lines := strings.Split(out, "\n")
+	runCount := 0
+	for _, l := range lines {
+		if strings.HasPrefix(l, "RUN ") {
+			runCount++
+		}
+	}
+	if runCount > 1 {
+		t.Errorf("injection not sanitized — found %d RUN lines:\n%s", runCount, out)
+	}
+}
+
+func TestEmitDockerfile_BlankLineBetweenStages(t *testing.T) {
+	plan := mustNodePlan(t)
+	out := EmitDockerfile(plan)
+
+	// Each FROM after the first must be preceded by a blank line.
+	lines := strings.Split(out, "\n")
+	fromCount := 0
+	for i, line := range lines {
+		if strings.HasPrefix(line, "FROM ") {
+			fromCount++
+			if fromCount > 1 && i > 0 && lines[i-1] != "" {
+				t.Errorf("expected blank line before FROM at line %d; previous line: %q", i+1, lines[i-1])
+			}
+		}
+	}
+	if fromCount < 2 {
+		t.Errorf("expected at least 2 FROM lines to test blank-line separation, got %d", fromCount)
+	}
+}
+
+func TestEmitDockerfile_SyntaxComment(t *testing.T) {
+	plan := mustNodePlan(t)
+	out := EmitDockerfile(plan)
+	// BuildKit syntax directive must appear at the top
+	assertContains(t, out, "# syntax=docker/dockerfile:1")
+}
+
+// helpers -----------------------------------------------------------------
+
+func assertContains(t *testing.T, haystack, needle string) {
+	t.Helper()
+	if !strings.Contains(haystack, needle) {
+		t.Errorf("expected Dockerfile to contain:\n  %q\ngot:\n%s", needle, haystack)
+	}
+}
+
+// singleStepPlan creates a minimal valid plan with a single stage containing
+// the given step. It uses "python:3.12-slim" as a base image so plan.Validate
+// doesn't complain (static framework is exempt from Expose). We bypass
+// Validate entirely here since EmitDockerfile is the unit under test.
+func singleStepPlan(step Step) *BuildPlan {
+	return &BuildPlan{
+		Framework: "go",
+		Expose:    8080,
+		Stages: []Stage{
+			{
+				Name:  "runtime",
+				From:  fmt.Sprintf("golang:%s-alpine", "1.26"),
+				Steps: []Step{step},
+			},
+		},
+	}
+}

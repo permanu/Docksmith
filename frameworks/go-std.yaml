@@ -1,0 +1,76 @@
+name: go
+runtime: go
+priority: 5
+
+detect:
+  all:
+    - file: go.mod
+  any:
+    - file: main.go
+    - dir: cmd
+
+version:
+  sources:
+    - file: .go-version
+  default: "1.26"
+
+defaults:
+  build: "go build -o app ."
+  start: "./app"
+
+plan:
+  port: 8080
+  stages:
+    - name: builder
+      base: go
+      steps:
+        - workdir: /app
+        - copy:
+            - go.mod
+            - go.sum
+            - ./
+        - run: go mod download
+          cache: /go/pkg/mod
+        - copy:
+            - "."
+            - "."
+        - run: "CGO_ENABLED=0 {{build_command}}"
+
+    - name: runtime
+      from: alpine:3.21
+      steps:
+        - run: apk --no-cache add ca-certificates
+        - workdir: /app
+        - copy_from:
+            stage: builder
+            src: /app/app
+            dst: ./app
+        - expose: "{{port}}"
+        - cmd:
+            - ./app
+
+tests:
+  - name: go.mod + main.go in root
+    fixture:
+      go.mod: "module example.com/myapp\n\ngo 1.22\n"
+      main.go: "package main\n\nimport \"net/http\"\n\nfunc main() { http.ListenAndServe(\":8080\", nil) }\n"
+    expect:
+      detected: true
+      framework: go
+      port: 8080
+
+  - name: go.mod + cmd/ subdir
+    fixture:
+      go.mod: "module example.com/myapp\n\ngo 1.22\n"
+      cmd/server/main.go: "package main\n\nfunc main() {}\n"
+    expect:
+      detected: true
+      framework: go
+      port: 8080
+
+  - name: go.mod only, no main
+    fixture:
+      go.mod: "module example.com/mylib\n\ngo 1.22\n"
+      lib.go: "package mylib\n\nfunc Foo() {}\n"
+    expect:
+      detected: false

@@ -1,0 +1,37 @@
+# AI artifacts — all AI-generated plans, specs, reviews stay local
+.claude/
+.local/
+CLAUDE.md
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Build
+dist/
+bin/
+docksmith
+cover.out
+cover.html
+cpu.prof
+mem.prof
+
+# Test fixtures (generated)
+testdata/tmp/
