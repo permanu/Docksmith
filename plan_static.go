@@ -21,6 +21,14 @@ func planStatic(fw *Framework) (*BuildPlan, error) {
 		},
 	}
 
+	// nginx needs writable cache dirs before switching to non-root user.
+	runtime.Steps = append(runtime.Steps, Step{
+		Type: StepRun,
+		Args: []string{
+			"mkdir -p /var/cache/nginx/client_temp /var/cache/nginx/proxy_temp /var/cache/nginx/fastcgi_temp /var/cache/nginx/uwsgi_temp /var/cache/nginx/scgi_temp && " +
+				"chown -R nginx:nginx /var/cache/nginx",
+		},
+	})
 	addNonRootUser(&runtime, "nginx")
 	addHealthcheck(&runtime, "static", 80)
 

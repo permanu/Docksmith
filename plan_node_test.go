@@ -328,6 +328,59 @@ func TestPlanNode_ServerRuntime_HasHealthcheck(t *testing.T) {
 	t.Error("server runtime should have a healthcheck on port 3000")
 }
 
+func TestPlanNode_StaticRuntime_HasNginxCacheDirs(t *testing.T) {
+	fw := &Framework{
+		Name:           "vite",
+		BuildCommand:   "npm run build",
+		Port:           80,
+		OutputDir:      "dist",
+		NodeVersion:    "22",
+		PackageManager: "npm",
+	}
+	plan := mustPlanNode(t, fw)
+	runtime := plan.Stages[len(plan.Stages)-1]
+	found := false
+	for _, s := range runtime.Steps {
+		if s.Type == StepRun && len(s.Args) > 0 &&
+			strings.Contains(s.Args[0], "/var/cache/nginx/client_temp") &&
+			strings.Contains(s.Args[0], "chown") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("static runtime should create and chown nginx cache dirs before USER nginx")
+	}
+}
+
+func TestPlanNode_StaticRuntime_NginxCacheDirsBeforeUser(t *testing.T) {
+	fw := &Framework{
+		Name:           "vite",
+		BuildCommand:   "npm run build",
+		Port:           80,
+		OutputDir:      "dist",
+		NodeVersion:    "22",
+		PackageManager: "npm",
+	}
+	plan := mustPlanNode(t, fw)
+	runtime := plan.Stages[len(plan.Stages)-1]
+	cacheIdx := -1
+	userIdx := -1
+	for i, s := range runtime.Steps {
+		if s.Type == StepRun && len(s.Args) > 0 && strings.Contains(s.Args[0], "/var/cache/nginx") {
+			cacheIdx = i
+		}
+		if s.Type == StepUser {
+			userIdx = i
+		}
+	}
+	if cacheIdx < 0 || userIdx < 0 {
+		t.Fatalf("missing steps: cache=%d user=%d", cacheIdx, userIdx)
+	}
+	if cacheIdx >= userIdx {
+		t.Errorf("nginx cache dir setup (idx %d) must come before USER (idx %d)", cacheIdx, userIdx)
+	}
+}
+
 func TestPlanNode_StaticRuntime_HasNginxUser(t *testing.T) {
 	fw := &Framework{
 		Name:           "vite",

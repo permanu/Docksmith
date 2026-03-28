@@ -130,6 +130,22 @@ func TestPlanStatic_FrameworkName(t *testing.T) {
 	}
 }
 
+func TestPlanStatic_HasNginxCacheDirs(t *testing.T) {
+	plan := mustPlanStatic(t, staticFramework())
+	stage := plan.Stages[0]
+	found := false
+	for _, s := range stage.Steps {
+		if s.Type == StepRun && len(s.Args) > 0 &&
+			strings.Contains(s.Args[0], "/var/cache/nginx/client_temp") &&
+			strings.Contains(s.Args[0], "chown") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("static runtime should create and chown nginx cache dirs before USER nginx")
+	}
+}
+
 func TestPlanStatic_HasNginxUser(t *testing.T) {
 	plan := mustPlanStatic(t, staticFramework())
 	stage := plan.Stages[0]
