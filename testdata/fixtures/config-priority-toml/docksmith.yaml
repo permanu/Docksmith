@@ -1,3 +1,5 @@
 runtime: node
-start: node index.js
-port: 3000
+start:
+  command: node index.js
+runtime_config:
+  expose: 3000

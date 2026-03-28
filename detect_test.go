@@ -136,7 +136,7 @@ func TestRegisterDetectorBefore_NotFound_Prepends(t *testing.T) {
 func TestDetectWithOptions_AcceptsConfigFileNames(t *testing.T) {
 	dir := t.TempDir()
 	// Write a valid config so DetectWithOptions returns a framework, not a parse error.
-	cfg := "runtime = \"node\"\nstart = \"node index.js\"\n"
+	cfg := "runtime = \"node\"\n\n[start]\ncommand = \"node index.js\"\n"
 	if err := os.WriteFile(filepath.Join(dir, "myapp.toml"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}

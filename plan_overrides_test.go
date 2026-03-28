@@ -164,7 +164,7 @@ func TestGenerateDockerfileWithOptions_ExposeOverride(t *testing.T) {
 
 func TestBuildWithOptions_PassesPlanOptions(t *testing.T) {
 	dir := t.TempDir()
-	mustWriteFile(t, dir+"/docksmith.yaml", "runtime: go\nstart: ./server\nversion: \"1.22\"\n")
+	mustWriteFile(t, dir+"/docksmith.yaml", "runtime: go\nversion: \"1.22\"\nstart:\n  command: ./server\n")
 	mustWriteFile(t, dir+"/go.mod", fmt.Sprintf("module testapp\n\ngo 1.22\n"))
 
 	dockerfile, _, err := Build(dir, WithExpose(7777))

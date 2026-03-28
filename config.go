@@ -12,20 +12,88 @@ import (
 )
 
 // Config represents a user-provided docksmith.toml/yaml/json configuration.
-// When present in the project root, it overrides all auto-detection.
 type Config struct {
-	Runtime        string            `toml:"runtime"         yaml:"runtime"         json:"runtime"`
-	Version        string            `toml:"version"         yaml:"version"         json:"version,omitempty"`
-	PackageManager string            `toml:"package_manager" yaml:"package_manager" json:"package_manager,omitempty"`
-	Build          string            `toml:"build"           yaml:"build"           json:"build,omitempty"`
-	Start          string            `toml:"start"           yaml:"start"           json:"start,omitempty"`
-	Port           int               `toml:"port"            yaml:"port"            json:"port,omitempty"`
-	Dockerfile     string            `toml:"dockerfile"      yaml:"dockerfile"      json:"dockerfile,omitempty"`
-	Env            map[string]string `toml:"env"             yaml:"env"             json:"env,omitempty"`
-	SystemDeps     []string          `toml:"system_deps"     yaml:"system_deps"     json:"system_deps,omitempty"`
+	Runtime        string            `toml:"runtime"          yaml:"runtime"          json:"runtime"`
+	Version        string            `toml:"version"          yaml:"version"          json:"version,omitempty"`
+	PackageManager string            `toml:"package_manager"  yaml:"package_manager"  json:"package_manager,omitempty"`
+	Dockerfile     string            `toml:"dockerfile"       yaml:"dockerfile"       json:"dockerfile,omitempty"`
+	Env            map[string]string `toml:"env"              yaml:"env"              json:"env,omitempty"`
+	Build          BuildConfig       `toml:"build"            yaml:"build"            json:"build,omitempty"`
+	Start          StartConfig       `toml:"start"            yaml:"start"            json:"start,omitempty"`
+	Install        InstallConfig     `toml:"install"          yaml:"install"          json:"install,omitempty"`
+	RuntimeConfig  RuntimeCfg        `toml:"runtime_config"   yaml:"runtime_config"   json:"runtime_config,omitempty"`
 }
 
-// defaultPorts maps runtime names to their conventional default ports.
+// BuildConfig groups build-time overrides.
+type BuildConfig struct {
+	Command string `toml:"command"  yaml:"command"  json:"command,omitempty"`
+	NoCache bool   `toml:"no_cache" yaml:"no_cache" json:"no_cache,omitempty"`
+}
+
+// StartConfig groups start-time overrides.
+type StartConfig struct {
+	Command    string   `toml:"command"    yaml:"command"    json:"command,omitempty"`
+	Entrypoint []string `toml:"entrypoint" yaml:"entrypoint" json:"entrypoint,omitempty"`
+}
+
+// InstallConfig groups install-time overrides.
+type InstallConfig struct {
+	Command    string   `toml:"command"     yaml:"command"     json:"command,omitempty"`
+	SystemDeps []string `toml:"system_deps" yaml:"system_deps" json:"system_deps,omitempty"`
+}
+
+// RuntimeCfg groups runtime-stage overrides.
+// User and Healthcheck use sentinel booleans because false disables the feature.
+type RuntimeCfg struct {
+	Image       string `toml:"image"  yaml:"image"  json:"image,omitempty"`
+	Expose      int    `toml:"expose" yaml:"expose" json:"expose,omitempty"`
+	User        string `toml:"-"      yaml:"-"      json:"-"`
+	UserSet     bool   `toml:"-"      yaml:"-"      json:"-"`
+	Healthcheck string `toml:"-"      yaml:"-"      json:"-"`
+	HCSet       bool   `toml:"-"      yaml:"-"      json:"-"`
+}
+
+// rawRuntimeCfg accepts bool or string for user/healthcheck during decode.
+type rawRuntimeCfg struct {
+	Image       string      `toml:"image"       yaml:"image"       json:"image,omitempty"`
+	Expose      int         `toml:"expose"      yaml:"expose"      json:"expose,omitempty"`
+	User        interface{} `toml:"user"        yaml:"user"        json:"user,omitempty"`
+	Healthcheck interface{} `toml:"healthcheck" yaml:"healthcheck" json:"healthcheck,omitempty"`
+}
+
+func (r rawRuntimeCfg) normalize() (RuntimeCfg, error) {
+	cfg := RuntimeCfg{Image: r.Image, Expose: r.Expose}
+	if r.User != nil {
+		switch v := r.User.(type) {
+		case bool:
+			if v {
+				return cfg, fmt.Errorf("runtime_config.user: true is invalid; use a username string or false to disable")
+			}
+			cfg.UserSet = true
+		case string:
+			cfg.User = v
+			cfg.UserSet = true
+		default:
+			return cfg, fmt.Errorf("runtime_config.user: must be string or false, got %T", r.User)
+		}
+	}
+	if r.Healthcheck != nil {
+		switch v := r.Healthcheck.(type) {
+		case bool:
+			if v {
+				return cfg, fmt.Errorf("runtime_config.healthcheck: true is invalid; use a command string or false to disable")
+			}
+			cfg.HCSet = true
+		case string:
+			cfg.Healthcheck = v
+			cfg.HCSet = true
+		default:
+			return cfg, fmt.Errorf("runtime_config.healthcheck: must be string or false, got %T", r.Healthcheck)
+		}
+	}
+	return cfg, nil
+}
+
 var defaultPorts = map[string]int{
 	"node":   3000,
 	"python": 8000,
@@ -41,14 +109,12 @@ var defaultPorts = map[string]int{
 	"static": 80,
 }
 
-// validRuntimes is the set of supported runtime identifiers.
 var validRuntimes = map[string]bool{
 	"node": true, "python": true, "go": true, "php": true,
 	"java": true, "dotnet": true, "rust": true, "ruby": true,
 	"elixir": true, "deno": true, "bun": true, "static": true,
 }
 
-// defaultConfigFileNames lists filenames checked in priority order.
 var defaultConfigFileNames = []string{
 	"docksmith.toml",
 	"docksmith.yaml",
@@ -57,15 +123,25 @@ var defaultConfigFileNames = []string{
 	".docksmith.yaml",
 }
 
-// LoadConfig reads the first matching config file from dir using the default
-// filename priority list. Returns (nil, nil) if no config file exists.
-// Returns (nil, err) if a config file exists but is invalid.
+// LoadConfig reads the first matching config file from dir.
+// Returns (nil, nil) if no config file exists.
 func LoadConfig(dir string) (*Config, error) {
 	return loadConfigWithNames(dir, defaultConfigFileNames)
 }
 
-// loadConfigWithNames is the internal loader used by both LoadConfig and
-// DetectWithOptions (when ConfigFileNames is provided).
+// LoadPlanOptions reads the config from dir and converts it to a PlanOption slice.
+// Returns nil (not an error) when no config file exists.
+func LoadPlanOptions(dir string) ([]PlanOption, error) {
+	cfg, err := LoadConfig(dir)
+	if err != nil {
+		return nil, err
+	}
+	if cfg == nil {
+		return nil, nil
+	}
+	return cfg.ToPlanOptions()
+}
+
 func loadConfigWithNames(dir string, names []string) (*Config, error) {
 	for _, name := range names {
 		path := filepath.Join(dir, name)
@@ -86,32 +162,64 @@ func loadConfigWithNames(dir string, names []string) (*Config, error) {
 	return nil, nil
 }
 
-// parseConfig parses raw bytes as TOML, YAML, or JSON based on the filename.
+type rawConfig struct {
+	Runtime        string            `toml:"runtime"         yaml:"runtime"         json:"runtime"`
+	Version        string            `toml:"version"         yaml:"version"         json:"version,omitempty"`
+	PackageManager string            `toml:"package_manager" yaml:"package_manager" json:"package_manager,omitempty"`
+	Dockerfile     string            `toml:"dockerfile"      yaml:"dockerfile"      json:"dockerfile,omitempty"`
+	Env            map[string]string `toml:"env"             yaml:"env"             json:"env,omitempty"`
+	Build          BuildConfig       `toml:"build"           yaml:"build"           json:"build,omitempty"`
+	Start          StartConfig       `toml:"start"           yaml:"start"           json:"start,omitempty"`
+	Install        InstallConfig     `toml:"install"         yaml:"install"         json:"install,omitempty"`
+	RuntimeConfig  rawRuntimeCfg     `toml:"runtime_config"  yaml:"runtime_config"  json:"runtime_config,omitempty"`
+}
+
 func parseConfig(name string, data []byte) (*Config, error) {
-	var cfg Config
+	var raw rawConfig
 	switch {
 	case strings.HasSuffix(name, ".json"):
-		if err := json.Unmarshal(data, &cfg); err != nil {
+		if err := json.Unmarshal(data, &raw); err != nil {
 			return nil, err
 		}
 	case strings.HasSuffix(name, ".toml"):
-		if err := toml.Unmarshal(data, &cfg); err != nil {
+		md, err := toml.Decode(string(data), &raw)
+		if err != nil {
 			return nil, err
 		}
+		if undecoded := md.Undecoded(); len(undecoded) > 0 {
+			keys := make([]string, len(undecoded))
+			for i, k := range undecoded {
+				keys[i] = k.String()
+			}
+			return nil, fmt.Errorf("unknown keys: %s", strings.Join(keys, ", "))
+		}
 	default:
-		// .yaml / .yml
-		if err := yaml.Unmarshal(data, &cfg); err != nil {
+		if err := yaml.Unmarshal(data, &raw); err != nil {
 			return nil, err
 		}
 	}
-	return &cfg, nil
+
+	rc, err := raw.RuntimeConfig.normalize()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Config{
+		Runtime:        raw.Runtime,
+		Version:        raw.Version,
+		PackageManager: raw.PackageManager,
+		Dockerfile:     raw.Dockerfile,
+		Env:            raw.Env,
+		Build:          raw.Build,
+		Start:          raw.Start,
+		Install:        raw.Install,
+		RuntimeConfig:  rc,
+	}, nil
 }
 
-// validate checks that required fields are present.
-// Either (runtime + start) or dockerfile must be set.
 func (c *Config) validate() error {
 	if c.Dockerfile != "" {
-		return nil // custom Dockerfile mode — nothing else required
+		return nil
 	}
 	if c.Runtime == "" {
 		return fmt.Errorf("runtime is required (or specify dockerfile)")
@@ -119,103 +227,16 @@ func (c *Config) validate() error {
 	if !validRuntimes[c.Runtime] {
 		return fmt.Errorf("unsupported runtime %q; valid: node, python, go, php, java, dotnet, rust, ruby, elixir, deno, bun, static", c.Runtime)
 	}
-	if c.Start == "" && c.Runtime != "static" {
-		return fmt.Errorf("start command is required for runtime %q", c.Runtime)
+	if c.Start.Command == "" && c.Runtime != "static" {
+		return fmt.Errorf("start.command is required for runtime %q", c.Runtime)
 	}
 	return nil
 }
 
-// applyDefaults fills in port if not specified by the user.
 func (c *Config) applyDefaults() {
-	if c.Port == 0 {
+	if c.RuntimeConfig.Expose == 0 {
 		if p, ok := defaultPorts[c.Runtime]; ok {
-			c.Port = p
+			c.RuntimeConfig.Expose = p
 		}
-	}
-}
-
-// ToFramework converts a Config to a Framework for Dockerfile generation.
-// When Dockerfile is set, the returned Framework has Name "dockerfile" and
-// the path stored in OutputDir (repurposed as the Dockerfile path indicator).
-func (c *Config) ToFramework() *Framework {
-	if c.Dockerfile != "" {
-		return &Framework{
-			Name:      "dockerfile",
-			OutputDir: c.Dockerfile,
-		}
-	}
-
-	fw := &Framework{
-		Name:         c.runtimeToFrameworkName(),
-		BuildCommand: c.Build,
-		StartCommand: c.Start,
-		Port:         c.Port,
-		SystemDeps:   c.SystemDeps,
-	}
-
-	switch c.Runtime {
-	case "node":
-		fw.NodeVersion = c.Version
-		fw.PackageManager = c.PackageManager
-	case "python":
-		fw.PythonVersion = c.Version
-		fw.PythonPM = c.PackageManager
-	case "go":
-		fw.GoVersion = c.Version
-		if fw.BuildCommand == "" {
-			fw.BuildCommand = "go build -o app ."
-		}
-	case "php":
-		fw.PHPVersion = c.Version
-	case "java":
-		fw.JavaVersion = c.Version
-	case "dotnet":
-		fw.DotnetVersion = c.Version
-	case "deno":
-		fw.DenoVersion = c.Version
-	case "bun":
-		fw.BunVersion = c.Version
-		fw.PackageManager = "bun"
-	case "rust":
-		// no dedicated version field on Framework
-	case "ruby":
-		// no dedicated version field on Framework
-	case "elixir":
-		// no dedicated version field on Framework
-	}
-
-	return fw
-}
-
-// runtimeToFrameworkName maps the config runtime to the Framework.Name that
-// the Dockerfile generator understands.
-func (c *Config) runtimeToFrameworkName() string {
-	switch c.Runtime {
-	case "node":
-		return "express" // generic Node.js
-	case "python":
-		return "flask" // generic Python
-	case "go":
-		return "go-std"
-	case "php":
-		return "php"
-	case "java":
-		return "maven"
-	case "dotnet":
-		return "aspnet-core"
-	case "rust":
-		return "rust-generic"
-	case "ruby":
-		return "rails"
-	case "elixir":
-		return "elixir-phoenix"
-	case "deno":
-		return "deno"
-	case "bun":
-		return "bun"
-	case "static":
-		return "static"
-	default:
-		return c.Runtime
 	}
 }

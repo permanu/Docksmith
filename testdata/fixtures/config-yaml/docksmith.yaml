@@ -1,11 +1,15 @@
 runtime: node
 version: "20"
-build: npm run build
-start: node server.js
-port: 4000
+build:
+  command: npm run build
+start:
+  command: node server.js
+runtime_config:
+  expose: 4000
 env:
   NODE_ENV: production
   LOG_LEVEL: info
-system_deps:
-  - libssl-dev
-  - curl
+install:
+  system_deps:
+    - libssl-dev
+    - curl

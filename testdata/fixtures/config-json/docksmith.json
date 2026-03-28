@@ -1,11 +1,11 @@
 {
   "runtime": "python",
   "version": "3.11",
-  "build": "pip install -r requirements.txt",
-  "start": "gunicorn app:app",
-  "port": 5000,
+  "build": {"command": "pip install -r requirements.txt"},
+  "start": {"command": "gunicorn app:app"},
+  "runtime_config": {"expose": 5000},
   "env": {
     "PYTHONDONTWRITEBYTECODE": "1"
   },
-  "system_deps": ["libpq-dev"]
+  "install": {"system_deps": ["libpq-dev"]}
 }

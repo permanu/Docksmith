@@ -24,13 +24,13 @@ func TestParseConfig_malformed(t *testing.T) {
 		{"binary json", "c.json", []byte{0xff, 0xfe, 0x00, 0x01, 0x80}, true},
 		{"binary toml", "c.toml", []byte{0xff, 0xfe, 0x00, 0x01, 0x80}, true},
 		{"truncated json", "c.json", []byte(`{"runtime": "node"`), true},
-		{"wrong type json", "c.json", []byte(`{"port": "not-a-number"}`), true},
-		{"wrong type yaml", "c.yaml", []byte(`port: not-a-number`), true},
+		{"wrong type json", "c.json", []byte(`{"runtime_config": {"expose": "not-a-number"}}`), true},
+		{"wrong type yaml", "c.yaml", []byte("runtime_config:\n  expose: not-a-number\n"), true},
 		{"bom yaml", "c.yaml", []byte(bom + `runtime: node`), false},
-		{"long runtime json", "c.json", []byte(`{"runtime":"` + longRuntime + `","start":"x"}`), false},
-		{"negative port json", "c.json", []byte(`{"runtime":"node","start":"x","port":-1}`), false},
-		{"unknown fields json", "c.json", []byte(`{"runtime":"node","start":"x","flavor":"vanilla"}`), false},
-		{"unknown fields yaml", "c.yaml", []byte("runtime: node\nstart: x\nflavor: vanilla\n"), false},
+		{"long runtime json", "c.json", []byte(`{"runtime":"` + longRuntime + `","start":{"command":"x"}}`), false},
+		{"negative port json", "c.json", []byte(`{"runtime":"node","start":{"command":"x"},"runtime_config":{"expose":-1}}`), false},
+		{"unknown fields json", "c.json", []byte(`{"runtime":"node","start":{"command":"x"},"flavor":"vanilla"}`), false},
+		{"unknown fields yaml", "c.yaml", []byte("runtime: node\nstart:\n  command: x\nflavor: vanilla\n"), false},
 	}
 
 	for _, tc := range cases {
@@ -55,9 +55,9 @@ func TestParseConfig_validation(t *testing.T) {
 		wantErr bool
 	}{
 		{"long runtime fails validation", "c.json",
-			[]byte(`{"runtime":"` + strings.Repeat("x", 10000) + `","start":"x"}`), true},
+			[]byte(`{"runtime":"` + strings.Repeat("x", 10000) + `","start":{"command":"x"}}`), true},
 		{"negative port still parses", "c.json",
-			[]byte(`{"runtime":"node","start":"x","port":-1}`), false},
+			[]byte(`{"runtime":"node","start":{"command":"x"},"runtime_config":{"expose":-1}}`), false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

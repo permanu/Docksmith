@@ -1,3 +1,5 @@
 runtime: ruby
-start: bundle exec puma
-port: 3000
+start:
+  command: bundle exec puma
+runtime_config:
+  expose: 3000

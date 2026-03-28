@@ -1,0 +1,11 @@
+runtime = "go"
+version = "1.22"
+
+[build]
+command = "go build -o server ."
+
+[start]
+command = "go run ."
+
+[runtime_config]
+expose = 9090

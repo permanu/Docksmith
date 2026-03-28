@@ -1,0 +1,7 @@
+runtime = "go"
+
+[start]
+command = "./server"
+
+[runtime_config]
+healthcheck = false
