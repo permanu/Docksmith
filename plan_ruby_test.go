@@ -198,3 +198,25 @@ func TestPlanRuby_FrameworkName(t *testing.T) {
 		t.Errorf("framework: got %q, want %q", plan.Framework, "rails")
 	}
 }
+
+func TestPlanRuby_Runtime_HasAppUser(t *testing.T) {
+	plan := mustPlanRuby(t, railsFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepUser && s.Args[0] == "appuser" {
+			return
+		}
+	}
+	t.Error("ruby runtime should have USER appuser step")
+}
+
+func TestPlanRuby_Runtime_HasHealthcheck(t *testing.T) {
+	plan := mustPlanRuby(t, railsFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepHealthcheck {
+			return
+		}
+	}
+	t.Error("ruby runtime should have a HEALTHCHECK step")
+}

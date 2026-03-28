@@ -59,6 +59,7 @@ func planDotnet(fw *Framework) (*BuildPlan, error) {
 		runtime.Steps = append(runtime.Steps,
 			Step{Type: StepEntrypoint, Args: []string{"dotnet", projectName + ".dll"}},
 		)
+		addNonRootUser(&runtime, "app")
 		expose := fw.Port
 		if expose <= 0 {
 			expose = 8080
@@ -81,6 +82,9 @@ func planDotnet(fw *Framework) (*BuildPlan, error) {
 		Step{Type: StepExpose, Args: []string{"8080"}},
 		Step{Type: StepEntrypoint, Args: []string{"dotnet", projectName + ".dll"}},
 	)
+
+	addNonRootUser(&runtime, "app")
+	addHealthcheck(&runtime, "dotnet", port)
 
 	return &BuildPlan{
 		Framework:    fw.Name,

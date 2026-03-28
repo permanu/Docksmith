@@ -121,3 +121,25 @@ func TestPlanDeno_CacheTarget_FileEntrypoint(t *testing.T) {
 		t.Errorf("want main.tsx, got %q", got)
 	}
 }
+
+func TestPlanDeno_Runtime_HasDenoUser(t *testing.T) {
+	plan := mustPlanDeno(t, makeFreshFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepUser && s.Args[0] == "deno" {
+			return
+		}
+	}
+	t.Error("deno runtime should have USER deno step")
+}
+
+func TestPlanDeno_Runtime_HasHealthcheck(t *testing.T) {
+	plan := mustPlanDeno(t, makeFreshFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepHealthcheck {
+			return
+		}
+	}
+	t.Error("deno runtime should have a HEALTHCHECK step")
+}

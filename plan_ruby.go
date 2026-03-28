@@ -85,6 +85,9 @@ func planRuby(fw *Framework) (*BuildPlan, error) {
 		},
 	}
 
+	addNonRootUser(&runtime, "")
+	addHealthcheck(&runtime, "ruby", port)
+
 	return &BuildPlan{
 		Framework:    fw.Name,
 		Stages:       []Stage{builder, runtime},

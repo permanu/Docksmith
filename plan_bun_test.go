@@ -99,3 +99,25 @@ func TestPlanBun_Framework(t *testing.T) {
 		t.Errorf("framework: want %q, got %q", "bun-elysia", plan.Framework)
 	}
 }
+
+func TestPlanBun_Runtime_HasBunUser(t *testing.T) {
+	plan := mustPlanBun(t, makeElysiaFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepUser && s.Args[0] == "bun" {
+			return
+		}
+	}
+	t.Error("bun runtime should have USER bun step")
+}
+
+func TestPlanBun_Runtime_HasHealthcheck(t *testing.T) {
+	plan := mustPlanBun(t, makeElysiaFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepHealthcheck {
+			return
+		}
+	}
+	t.Error("bun runtime should have a HEALTHCHECK step")
+}

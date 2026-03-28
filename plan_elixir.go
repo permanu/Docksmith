@@ -61,6 +61,9 @@ func planElixir(fw *Framework) (*BuildPlan, error) {
 		},
 	}
 
+	addNonRootUser(&runtime, "")
+	addHealthcheck(&runtime, "elixir", port)
+
 	return &BuildPlan{
 		Framework:    fw.Name,
 		Stages:       []Stage{builder, runtime},

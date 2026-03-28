@@ -104,6 +104,9 @@ func planPHPLaravel(fw *Framework, phpVer string, port int) (*BuildPlan, error) 
 		},
 	}
 
+	addNonRootUser(&runtime, "www-data")
+	addHealthcheck(&runtime, "php", port)
+
 	return &BuildPlan{
 		Framework:    fw.Name,
 		Stages:       []Stage{builder, runtime},

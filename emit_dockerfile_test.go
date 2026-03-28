@@ -142,11 +142,11 @@ func TestEmitDockerfile_Go_CGODisabled(t *testing.T) {
 	assertContains(t, out, "CGO_ENABLED=0")
 }
 
-func TestEmitDockerfile_Go_AlpineRuntime(t *testing.T) {
+func TestEmitDockerfile_Go_DistrolessRuntime(t *testing.T) {
 	plan := mustGoPlan(t)
 	out := EmitDockerfile(plan)
 
-	assertContains(t, out, "FROM alpine:3.21 AS runtime")
+	assertContains(t, out, "FROM gcr.io/distroless/static-debian12:nonroot AS runtime")
 }
 
 func TestEmitDockerfile_Go_BinaryCopy(t *testing.T) {

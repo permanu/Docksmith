@@ -191,3 +191,25 @@ func TestPlanElixir_FrameworkName(t *testing.T) {
 		t.Errorf("framework: got %q, want %q", plan.Framework, "elixir-phoenix")
 	}
 }
+
+func TestPlanElixir_Runtime_HasAppUser(t *testing.T) {
+	plan := mustPlanElixir(t, phoenixFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepUser && s.Args[0] == "appuser" {
+			return
+		}
+	}
+	t.Error("elixir runtime should have USER appuser step")
+}
+
+func TestPlanElixir_Runtime_HasHealthcheck(t *testing.T) {
+	plan := mustPlanElixir(t, phoenixFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepHealthcheck {
+			return
+		}
+	}
+	t.Error("elixir runtime should have a HEALTHCHECK step")
+}

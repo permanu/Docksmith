@@ -37,6 +37,9 @@ func planBun(fw *Framework) (*BuildPlan, error) {
 		},
 	}
 
+	addNonRootUser(&runtimeStage, "bun")
+	addHealthcheck(&runtimeStage, "bun", fw.Port)
+
 	return &BuildPlan{
 		Framework: fw.Name,
 		Expose:    fw.Port,

@@ -129,3 +129,25 @@ func TestPlanStatic_FrameworkName(t *testing.T) {
 		t.Errorf("framework: got %q, want %q", plan.Framework, "static")
 	}
 }
+
+func TestPlanStatic_HasNginxUser(t *testing.T) {
+	plan := mustPlanStatic(t, staticFramework())
+	stage := plan.Stages[0]
+	for _, s := range stage.Steps {
+		if s.Type == StepUser && s.Args[0] == "nginx" {
+			return
+		}
+	}
+	t.Error("static runtime should have USER nginx step")
+}
+
+func TestPlanStatic_HasHealthcheck(t *testing.T) {
+	plan := mustPlanStatic(t, staticFramework())
+	stage := plan.Stages[0]
+	for _, s := range stage.Steps {
+		if s.Type == StepHealthcheck {
+			return
+		}
+	}
+	t.Error("static runtime should have a HEALTHCHECK step")
+}

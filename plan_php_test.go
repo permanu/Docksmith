@@ -194,3 +194,25 @@ func TestPlanPHP_DefaultPHPVersion(t *testing.T) {
 		t.Errorf("expected php image, got %q", plan.Stages[0].From)
 	}
 }
+
+func TestPlanPHP_Laravel_Runtime_HasWwwDataUser(t *testing.T) {
+	plan := mustPlanPHP(t, laravelFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepUser && s.Args[0] == "www-data" {
+			return
+		}
+	}
+	t.Error("laravel runtime should have USER www-data step")
+}
+
+func TestPlanPHP_Laravel_Runtime_HasHealthcheck(t *testing.T) {
+	plan := mustPlanPHP(t, laravelFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepHealthcheck {
+			return
+		}
+	}
+	t.Error("laravel runtime should have a HEALTHCHECK step")
+}

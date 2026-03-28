@@ -11,20 +11,23 @@ func planStatic(fw *Framework) (*BuildPlan, error) {
 		outputDir = "."
 	}
 
-	return &BuildPlan{
-		Framework: "static",
-		Expose:    0,
-		Stages: []Stage{
-			{
-				Name: "runtime",
-				From: "nginx:alpine",
-				Steps: []Step{
-					{Type: StepCopy, Args: []string{outputDir, "/usr/share/nginx/html"}},
-					{Type: StepExpose, Args: []string{"80"}},
-					{Type: StepCmd, Args: []string{"nginx", "-g", "daemon off;"}},
-				},
-			},
+	runtime := Stage{
+		Name: "runtime",
+		From: "nginx:alpine",
+		Steps: []Step{
+			{Type: StepCopy, Args: []string{outputDir, "/usr/share/nginx/html"}},
+			{Type: StepExpose, Args: []string{"80"}},
+			{Type: StepCmd, Args: []string{"nginx", "-g", "daemon off;"}},
 		},
+	}
+
+	addNonRootUser(&runtime, "nginx")
+	addHealthcheck(&runtime, "static", 80)
+
+	return &BuildPlan{
+		Framework:    "static",
+		Expose:       0,
+		Stages:       []Stage{runtime},
 		Dockerignore: []string{".git", "*.log", "node_modules"},
 	}, nil
 }

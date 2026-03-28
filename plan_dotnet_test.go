@@ -200,3 +200,36 @@ func TestPlanDotnet_DefaultDotnetVersion(t *testing.T) {
 		t.Errorf("expected dotnet 8.0 in builder image, got %q", plan.Stages[0].From)
 	}
 }
+
+func TestPlanDotnet_Web_HasAppUser(t *testing.T) {
+	plan := mustPlanDotnet(t, aspnetFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepUser && s.Args[0] == "app" {
+			return
+		}
+	}
+	t.Error("dotnet web runtime should have USER app step")
+}
+
+func TestPlanDotnet_Web_HasHealthcheck(t *testing.T) {
+	plan := mustPlanDotnet(t, aspnetFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepHealthcheck {
+			return
+		}
+	}
+	t.Error("dotnet web runtime should have a HEALTHCHECK step")
+}
+
+func TestPlanDotnet_Worker_HasAppUser(t *testing.T) {
+	plan := mustPlanDotnet(t, dotnetWorkerFramework())
+	runtime := plan.Stages[1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepUser && s.Args[0] == "app" {
+			return
+		}
+	}
+	t.Error("dotnet worker runtime should have USER app step")
+}
