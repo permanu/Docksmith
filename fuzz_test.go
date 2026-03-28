@@ -3,6 +3,8 @@ package docksmith
 import (
 	"strings"
 	"testing"
+
+	"github.com/permanu/docksmith/config"
 )
 
 func FuzzSanitizeDockerfileArg(f *testing.F) {
@@ -52,9 +54,9 @@ func FuzzParseConfig(f *testing.F) {
 	f.Add([]byte{})
 	f.Add([]byte("{{invalid"))
 	f.Fuzz(func(t *testing.T, data []byte) {
-		_, _ = parseConfig("test.toml", data)
-		_, _ = parseConfig("test.yaml", data)
-		_, _ = parseConfig("test.json", data)
+		_, _ = config.ParseConfig("test.toml", data)
+		_, _ = config.ParseConfig("test.yaml", data)
+		_, _ = config.ParseConfig("test.json", data)
 	})
 }
 

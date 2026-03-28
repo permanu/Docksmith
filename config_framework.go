@@ -1,7 +1,7 @@
 package docksmith
 
-// ToPlanOptions converts Config fields into a PlanOption slice.
-func (c *Config) ToPlanOptions() ([]PlanOption, error) {
+// ConfigToPlanOptions converts Config fields into a PlanOption slice.
+func ConfigToPlanOptions(c *Config) ([]PlanOption, error) {
 	var opts []PlanOption
 
 	if c.Build.Command != "" {
@@ -45,8 +45,8 @@ func (c *Config) ToPlanOptions() ([]PlanOption, error) {
 	return opts, nil
 }
 
-// ToFramework converts a Config to a Framework for Dockerfile generation.
-func (c *Config) ToFramework() *Framework {
+// ConfigToFramework converts a Config to a Framework for Dockerfile generation.
+func ConfigToFramework(c *Config) *Framework {
 	if c.Dockerfile != "" {
 		return &Framework{
 			Name:      "dockerfile",
@@ -55,7 +55,7 @@ func (c *Config) ToFramework() *Framework {
 	}
 
 	fw := &Framework{
-		Name:         c.runtimeToFrameworkName(),
+		Name:         runtimeToFrameworkName(c.Runtime),
 		BuildCommand: c.Build.Command,
 		StartCommand: c.Start.Command,
 		Port:         c.RuntimeConfig.Expose,
@@ -90,8 +90,8 @@ func (c *Config) ToFramework() *Framework {
 	return fw
 }
 
-func (c *Config) runtimeToFrameworkName() string {
-	switch c.Runtime {
+func runtimeToFrameworkName(runtime string) string {
+	switch runtime {
 	case "node":
 		return "express"
 	case "python":
@@ -117,6 +117,6 @@ func (c *Config) runtimeToFrameworkName() string {
 	case "static":
 		return "static"
 	default:
-		return c.Runtime
+		return runtime
 	}
 }

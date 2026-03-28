@@ -39,7 +39,7 @@ func TestLoadConfig_Nested_TOML_UserString(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	opts, err := cfg.ToPlanOptions()
+	opts, err := ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestLoadConfig_Nested_TOML_UserFalse_DisablesUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	opts, err := cfg.ToPlanOptions()
+	opts, err := ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestLoadConfig_Nested_TOML_HealthcheckDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	opts, err := cfg.ToPlanOptions()
+	opts, err := ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestLoadConfig_Nested_TOML_HealthcheckString(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	opts, err := cfg.ToPlanOptions()
+	opts, err := ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestToPlanOptions_BuildCommand(t *testing.T) {
 		Build:   BuildConfig{Command: "make build"},
 		Start:   StartConfig{Command: "./server"},
 	}
-	opts, err := cfg.ToPlanOptions()
+	opts, err := ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestToPlanOptions_StartCommand(t *testing.T) {
 		Runtime: "node",
 		Start:   StartConfig{Command: "node dist/index.js"},
 	}
-	opts, err := cfg.ToPlanOptions()
+	opts, err := ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestToPlanOptions_ExtraEnv(t *testing.T) {
 		Start:   StartConfig{Command: "gunicorn app:app"},
 		Env:     map[string]string{"PORT": "8000"},
 	}
-	opts, err := cfg.ToPlanOptions()
+	opts, err := ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestToPlanOptions_SystemDeps(t *testing.T) {
 		Start:   StartConfig{Command: "gunicorn app:app"},
 		Install: InstallConfig{SystemDeps: []string{"libpq-dev", "curl"}},
 	}
-	opts, err := cfg.ToPlanOptions()
+	opts, err := ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestToPlanOptions_NoBuildCache(t *testing.T) {
 		Start:   StartConfig{Command: "./server"},
 		Build:   BuildConfig{NoCache: true},
 	}
-	opts, err := cfg.ToPlanOptions()
+	opts, err := ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -226,7 +226,7 @@ func TestToPlanOptions_RuntimeImage(t *testing.T) {
 			Image: "gcr.io/distroless/static:nonroot",
 		},
 	}
-	opts, err := cfg.ToPlanOptions()
+	opts, err := ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}

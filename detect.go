@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/permanu/docksmith/config"
 )
 
 // staticFileExtensions are file extensions that indicate actual web-servable content.
@@ -98,16 +100,16 @@ func DetectWithOptions(dir string, opts DetectOptions) (*Framework, error) {
 func loadConfigFramework(dir string, opts DetectOptions) (*Framework, error) {
 	names := opts.ConfigFileNames
 	if len(names) == 0 {
-		names = defaultConfigFileNames
+		names = config.DefaultFileNames
 	}
-	cfg, err := loadConfigWithNames(dir, names)
+	cfg, err := config.LoadWithNames(dir, names)
 	if err != nil {
 		return nil, err
 	}
 	if cfg == nil {
 		return nil, nil
 	}
-	return cfg.ToFramework(), nil
+	return ConfigToFramework(cfg), nil
 }
 
 // RegisterDetector prepends d to the registry, giving it the highest priority

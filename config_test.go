@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/permanu/docksmith/config"
 )
 
 // ---------------------------------------------------------------------------
@@ -256,7 +258,7 @@ func TestConfig_ToFramework_AllRuntimes(t *testing.T) {
 				cfg.PackageManager = "bun"
 			}
 
-			fw := cfg.ToFramework()
+			fw := ConfigToFramework(cfg)
 			if fw == nil {
 				t.Fatal("got nil Framework")
 			}
@@ -308,7 +310,7 @@ func TestConfig_ToFramework_GoDefaultBuildCommand(t *testing.T) {
 		Start:         StartConfig{Command: "go run ."},
 		RuntimeConfig: RuntimeCfg{Expose: 8080},
 	}
-	fw := cfg.ToFramework()
+	fw := ConfigToFramework(cfg)
 	if fw.BuildCommand != "go build -o app ." {
 		t.Errorf("BuildCommand = %q, want %q", fw.BuildCommand, "go build -o app .")
 	}
@@ -321,7 +323,7 @@ func TestConfig_ToFramework_GoCustomBuildCommand_NotOverridden(t *testing.T) {
 		Start:         StartConfig{Command: "go run ."},
 		RuntimeConfig: RuntimeCfg{Expose: 8080},
 	}
-	fw := cfg.ToFramework()
+	fw := ConfigToFramework(cfg)
 	if fw.BuildCommand != "make build" {
 		t.Errorf("BuildCommand = %q, want %q", fw.BuildCommand, "make build")
 	}
@@ -329,7 +331,7 @@ func TestConfig_ToFramework_GoCustomBuildCommand_NotOverridden(t *testing.T) {
 
 func TestConfig_ToFramework_DockerfileMode(t *testing.T) {
 	cfg := &Config{Dockerfile: "./Dockerfile.custom"}
-	fw := cfg.ToFramework()
+	fw := ConfigToFramework(cfg)
 	if fw.Name != "dockerfile" {
 		t.Errorf("Name = %q, want %q", fw.Name, "dockerfile")
 	}
@@ -418,7 +420,7 @@ func TestLoadConfig_MissingFile_ReturnsNilNil(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDetectWithOptions_ConfigFileNames_CustomName(t *testing.T) {
-	cfg, err := loadConfigWithNames(
+	cfg, err := config.LoadWithNames(
 		filepath.Join("testdata", "fixtures", "config-custom-name"),
 		[]string{"deploy.yaml"},
 	)
@@ -437,7 +439,7 @@ func TestDetectWithOptions_ConfigFileNames_SkipsDefaultNames(t *testing.T) {
 	dir := t.TempDir()
 	mustWriteFile(t, filepath.Join(dir, "docksmith.yaml"), "runtime: node\nstart:\n  command: node index.js\n")
 
-	cfg, err := loadConfigWithNames(dir, []string{"myapp.toml"})
+	cfg, err := config.LoadWithNames(dir, []string{"myapp.toml"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

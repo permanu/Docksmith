@@ -102,7 +102,7 @@ func TestConfig_adversarialValues(t *testing.T) {
 			if cfg == nil {
 				return
 			}
-			fw := cfg.ToFramework()
+			fw := ConfigToFramework(cfg)
 			if fw.Name == "dockerfile" {
 				return
 			}

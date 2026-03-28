@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/permanu/docksmith/config"
 )
 
 func TestParseConfig_malformed(t *testing.T) {
@@ -36,7 +38,7 @@ func TestParseConfig_malformed(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg, err := parseConfig(tc.file, tc.data)
+			cfg, err := config.ParseConfig(tc.file, tc.data)
 			if tc.wantErr && err == nil {
 				t.Error("expected error")
 			}
@@ -62,11 +64,11 @@ func TestParseConfig_validation(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg, err := parseConfig(tc.file, tc.data)
+			cfg, err := config.ParseConfig(tc.file, tc.data)
 			if err != nil {
 				return
 			}
-			err = cfg.validate()
+			err = cfg.Validate()
 			if tc.wantErr && err == nil {
 				t.Error("expected validation error")
 			}
