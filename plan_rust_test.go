@@ -48,11 +48,32 @@ func TestPlanRust_BuilderUsesRustAlpine(t *testing.T) {
 	}
 }
 
-func TestPlanRust_RuntimeUsesAlpine(t *testing.T) {
+func TestPlanRust_RuntimeUsesDistroless(t *testing.T) {
 	plan := mustPlanRust(t, rustActixFramework())
 	from := plan.Stages[1].From
-	if !strings.HasPrefix(from, "alpine:") {
-		t.Errorf("runtime should use alpine, got %q", from)
+	if from != "gcr.io/distroless/cc-debian12:nonroot" {
+		t.Errorf("runtime should use distroless/cc nonroot, got %q", from)
+	}
+}
+
+func TestPlanRust_RuntimeHasNonRootUser(t *testing.T) {
+	plan := mustPlanRust(t, rustActixFramework())
+	runtime := plan.Stages[1]
+	for _, step := range runtime.Steps {
+		if step.Type == StepUser && step.Args[0] == "nonroot" {
+			return
+		}
+	}
+	t.Error("runtime should have USER nonroot step")
+}
+
+func TestPlanRust_RuntimeNoHealthcheck(t *testing.T) {
+	plan := mustPlanRust(t, rustActixFramework())
+	runtime := plan.Stages[1]
+	for _, step := range runtime.Steps {
+		if step.Type == StepHealthcheck {
+			t.Error("rust distroless runtime should not have HEALTHCHECK")
+		}
 	}
 }
 

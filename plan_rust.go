@@ -10,7 +10,7 @@ import (
 // Stage "runtime" is a minimal alpine image with just the compiled binary.
 func planRust(fw *Framework) (*BuildPlan, error) {
 	builderImage := ResolveDockerTag("rust", "")
-	runtimeImage := "alpine:3.21"
+	runtimeImage := "gcr.io/distroless/cc-debian12:nonroot"
 
 	port := fw.Port
 	if port == 0 {
@@ -48,13 +48,13 @@ func planRust(fw *Framework) (*BuildPlan, error) {
 		Name: "runtime",
 		From: runtimeImage,
 		Steps: []Step{
-			{Type: StepRun, Args: []string{"apk --no-cache add ca-certificates"}},
 			{Type: StepWorkdir, Args: []string{"/app"}},
 			{
 				Type:     StepCopyFrom,
 				CopyFrom: &CopyFrom{Stage: "builder", Src: "/app/target/release", Dst: "."},
 				Link:     true,
 			},
+			{Type: StepUser, Args: []string{"nonroot"}},
 			{Type: StepExpose, Args: []string{strconv.Itoa(port)}},
 			{Type: StepCmd, Args: startArgs},
 		},

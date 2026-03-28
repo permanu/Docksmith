@@ -48,12 +48,48 @@ func TestPlanGo_BuilderUsesGolangAlpine(t *testing.T) {
 	}
 }
 
-func TestPlanGo_RuntimeUsesAlpine(t *testing.T) {
+func TestPlanGo_RuntimeUsesDistroless(t *testing.T) {
 	plan := mustPlanGo(t, goFramework())
 	from := plan.Stages[1].From
-	if !strings.HasPrefix(from, "alpine:") {
-		t.Errorf("runtime should use plain alpine, got %q", from)
+	if from != "gcr.io/distroless/static-debian12:nonroot" {
+		t.Errorf("runtime should use distroless/static nonroot, got %q", from)
 	}
+}
+
+func TestPlanGo_RuntimeHasNonRootUser(t *testing.T) {
+	plan := mustPlanGo(t, goFramework())
+	runtime := plan.Stages[1]
+	for _, step := range runtime.Steps {
+		if step.Type == StepUser && step.Args[0] == "nonroot" {
+			return
+		}
+	}
+	t.Error("runtime should have USER nonroot step")
+}
+
+func TestPlanGo_RuntimeNoHealthcheck(t *testing.T) {
+	plan := mustPlanGo(t, goFramework())
+	runtime := plan.Stages[1]
+	for _, step := range runtime.Steps {
+		if step.Type == StepHealthcheck {
+			t.Error("go distroless runtime should not have HEALTHCHECK")
+		}
+	}
+}
+
+func TestPlanGo_BuilderStripsSymbols(t *testing.T) {
+	plan := mustPlanGo(t, goFramework())
+	builder := plan.Stages[0]
+	for _, step := range builder.Steps {
+		if step.Type == StepRun {
+			for _, arg := range step.Args {
+				if strings.Contains(arg, "go build") && strings.Contains(arg, "-ldflags") {
+					return
+				}
+			}
+		}
+	}
+	t.Error("builder should use -ldflags for symbol stripping")
 }
 
 func TestPlanGo_DefaultVersion(t *testing.T) {

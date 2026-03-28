@@ -7,7 +7,7 @@ import (
 )
 
 // planGo builds a 2-stage BuildPlan for Go apps.
-// Builder compiles a static binary; runtime uses a minimal alpine image.
+// Builder compiles a stripped static binary; runtime is distroless/nonroot.
 func planGo(fw *Framework) (*BuildPlan, error) {
 	version := cmp.Or(fw.GoVersion, "1.26")
 	binary, target := goBuildArgs(fw.BuildCommand)
@@ -20,7 +20,7 @@ func planGo(fw *Framework) (*BuildPlan, error) {
 		Expose:    fw.Port,
 		Stages: []Stage{
 			{Name: "builder", From: ResolveDockerTag("go", version), Steps: builderSteps},
-			{Name: "runtime", From: "alpine:3.21", Steps: runtimeSteps},
+			{Name: "runtime", From: "gcr.io/distroless/static-debian12:nonroot", Steps: runtimeSteps},
 		},
 	}, nil
 }
@@ -37,19 +37,19 @@ func goBuilderSteps(binary, target string) []Step {
 		{Type: StepCopy, Args: []string{".", "."}},
 		{
 			Type: StepRun,
-			Args: []string{fmt.Sprintf("CGO_ENABLED=0 go build -o /app/%s %s", binary, target)},
+			Args: []string{fmt.Sprintf(`CGO_ENABLED=0 go build -ldflags="-w -s" -o /app/%s %s`, binary, target)},
 		},
 	}
 }
 
 func goRuntimeSteps(binary string, port int) []Step {
 	return []Step{
-		{Type: StepRun, Args: []string{"apk --no-cache add ca-certificates"}},
 		{Type: StepWorkdir, Args: []string{"/app"}},
 		{
 			Type:     StepCopyFrom,
 			CopyFrom: &CopyFrom{Stage: "builder", Src: fmt.Sprintf("/app/%s", binary), Dst: fmt.Sprintf("./%s", binary)},
 		},
+		{Type: StepUser, Args: []string{"nonroot"}},
 		{Type: StepExpose, Args: []string{fmt.Sprintf("%d", port)}},
 		{Type: StepCmd, Args: []string{fmt.Sprintf("./%s", binary)}},
 	}
