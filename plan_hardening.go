@@ -1,0 +1,107 @@
+package docksmith
+
+import (
+	"fmt"
+	"strings"
+)
+
+// addNonRootUser appends user setup steps to a stage.
+// When builtInUser is non-empty (e.g. "node", "nginx"), the image already has
+// that user — just switch to it. When empty, create appgroup + appuser first.
+func addNonRootUser(stage *Stage, builtInUser string) {
+	if builtInUser != "" {
+		stage.Steps = append(stage.Steps, Step{
+			Type: StepUser,
+			Args: []string{builtInUser},
+		})
+		return
+	}
+	stage.Steps = append(stage.Steps,
+		Step{
+			Type: StepRun,
+			Args: []string{
+				"groupadd --system appgroup && " +
+					"useradd --system --no-create-home --gid appgroup appuser",
+			},
+		},
+		Step{Type: StepUser, Args: []string{"appuser"}},
+	)
+}
+
+// addHealthcheck appends a HEALTHCHECK step appropriate for the runtime.
+// Go and Rust use distroless images with no shell — no healthcheck is added.
+func addHealthcheck(stage *Stage, runtime string, port int) {
+	cmd := healthcheckCmd(runtime, port)
+	if cmd == "" {
+		return
+	}
+	stage.Steps = append(stage.Steps, Step{
+		Type: StepHealthcheck,
+		Args: []string{cmd},
+	})
+}
+
+func healthcheckCmd(runtime string, port int) string {
+	switch runtime {
+	case "go", "rust":
+		// Distroless: no shell, no curl, no wget.
+		return ""
+	case "node":
+		return fmt.Sprintf(
+			`node -e "const http=require('http');http.get('http://localhost:%d/',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"`,
+			port,
+		)
+	case "python":
+		return fmt.Sprintf(
+			`python -c "import urllib.request; urllib.request.urlopen('http://localhost:%d/')"`,
+			port,
+		)
+	case "ruby":
+		return fmt.Sprintf(
+			`ruby -e "require 'net/http'; Net::HTTP.get(URI('http://localhost:%d/'))"`,
+			port,
+		)
+	case "php", "java", "dotnet":
+		return fmt.Sprintf("curl -f http://localhost:%d/", port)
+	case "elixir":
+		return fmt.Sprintf("wget -q --spider http://localhost:%d/", port)
+	case "bun":
+		return fmt.Sprintf(
+			`bun -e "fetch('http://localhost:%d/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"`,
+			port,
+		)
+	case "deno":
+		return fmt.Sprintf(
+			`deno eval "const r=await fetch('http://localhost:%d/');if(!r.ok)Deno.exit(1)"`,
+			port,
+		)
+	case "static":
+		return "curl -f http://localhost:80/"
+	default:
+		return fmt.Sprintf("curl -f http://localhost:%d/", port)
+	}
+}
+
+// addTini installs tini in the builder via apt and wires it as the runtime ENTRYPOINT.
+// tini reaps zombie processes and forwards signals — critical for Node/Python workloads.
+func addTini(builder, runtime *Stage) {
+	builder.Steps = append(builder.Steps, Step{
+		Type: StepRun,
+		Args: []string{withAptCleanup("apt-get update -qq && apt-get install -y --no-install-recommends tini")},
+	})
+	runtime.Steps = append(runtime.Steps,
+		Step{
+			Type:     StepCopyFrom,
+			CopyFrom: &CopyFrom{Stage: builder.Name, Src: "/usr/bin/tini", Dst: "/usr/bin/tini"},
+		},
+		Step{Type: StepEntrypoint, Args: []string{"/usr/bin/tini", "--"}},
+	)
+}
+
+// withAptCleanup appends apt list cleanup to a shell command.
+func withAptCleanup(cmd string) string {
+	if strings.Contains(cmd, "rm -rf /var/lib/apt/lists/*") {
+		return cmd
+	}
+	return cmd + " && rm -rf /var/lib/apt/lists/*"
+}
