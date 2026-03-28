@@ -187,8 +187,9 @@ func TestAddHealthcheck_Java(t *testing.T) {
 	if hc == nil {
 		t.Fatal("expected a HEALTHCHECK step for java")
 	}
-	if !strings.Contains(hc.Args[0], "curl") {
-		t.Errorf("java healthcheck should use curl, got: %s", hc.Args[0])
+	// Alpine JRE images don't have curl — use wget instead.
+	if !strings.Contains(hc.Args[0], "wget") {
+		t.Errorf("java healthcheck should use wget, got: %s", hc.Args[0])
 	}
 }
 

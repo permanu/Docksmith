@@ -63,7 +63,10 @@ func healthcheckCmd(runtime string, port int) string {
 			`ruby -e "require 'net/http'; Net::HTTP.get(URI('http://localhost:%d/'))"`,
 			port,
 		)
-	case "php", "java", "dotnet":
+	case "java":
+		// Alpine JRE images don't have curl; wget is available by default.
+		return fmt.Sprintf("wget -q --spider http://localhost:%d/", port)
+	case "php", "dotnet":
 		return fmt.Sprintf("curl -f http://localhost:%d/", port)
 	case "elixir":
 		return fmt.Sprintf("wget -q --spider http://localhost:%d/", port)
