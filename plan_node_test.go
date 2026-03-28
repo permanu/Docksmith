@@ -1,6 +1,7 @@
 package docksmith
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -260,4 +261,109 @@ func TestNodeVersionAtLeast(t *testing.T) {
 			t.Errorf("nodeVersionAtLeast(%q, %d) = %v, want %v", tc.ver, tc.min, got, tc.want)
 		}
 	}
+}
+
+func TestPlanNode_ServerRuntime_HasTini(t *testing.T) {
+	fw := &Framework{
+		Name:           "nextjs",
+		BuildCommand:   "npm run build",
+		StartCommand:   "npm start",
+		Port:           3000,
+		NodeVersion:    "22",
+		PackageManager: "npm",
+	}
+	plan := mustPlanNode(t, fw)
+	runtime := plan.Stages[len(plan.Stages)-1]
+	var hasEntrypoint bool
+	for _, s := range runtime.Steps {
+		if s.Type == StepEntrypoint {
+			joined := strings.Join(s.Args, " ")
+			if strings.Contains(joined, "tini") {
+				hasEntrypoint = true
+			}
+		}
+	}
+	if !hasEntrypoint {
+		t.Error("server runtime should have tini ENTRYPOINT")
+	}
+}
+
+func TestPlanNode_ServerRuntime_HasNodeUser(t *testing.T) {
+	fw := &Framework{
+		Name:           "nextjs",
+		BuildCommand:   "npm run build",
+		StartCommand:   "npm start",
+		Port:           3000,
+		NodeVersion:    "22",
+		PackageManager: "npm",
+	}
+	plan := mustPlanNode(t, fw)
+	runtime := plan.Stages[len(plan.Stages)-1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepUser && s.Args[0] == "node" {
+			return
+		}
+	}
+	t.Error("server runtime should have USER node step")
+}
+
+func TestPlanNode_ServerRuntime_HasHealthcheck(t *testing.T) {
+	fw := &Framework{
+		Name:           "nextjs",
+		BuildCommand:   "npm run build",
+		StartCommand:   "npm start",
+		Port:           3000,
+		NodeVersion:    "22",
+		PackageManager: "npm",
+	}
+	plan := mustPlanNode(t, fw)
+	runtime := plan.Stages[len(plan.Stages)-1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepHealthcheck {
+			if strings.Contains(s.Args[0], "3000") {
+				return
+			}
+		}
+	}
+	t.Error("server runtime should have a healthcheck on port 3000")
+}
+
+func TestPlanNode_StaticRuntime_HasNginxUser(t *testing.T) {
+	fw := &Framework{
+		Name:           "vite",
+		BuildCommand:   "npm run build",
+		Port:           80,
+		OutputDir:      "dist",
+		NodeVersion:    "22",
+		PackageManager: "npm",
+	}
+	plan := mustPlanNode(t, fw)
+	runtime := plan.Stages[len(plan.Stages)-1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepUser && s.Args[0] == "nginx" {
+			return
+		}
+	}
+	t.Error("static runtime should have USER nginx step")
+}
+
+func TestPlanNode_StaticRuntime_HasHealthcheck(t *testing.T) {
+	fw := &Framework{
+		Name:           "vite",
+		BuildCommand:   "npm run build",
+		Port:           80,
+		OutputDir:      "dist",
+		NodeVersion:    "22",
+		PackageManager: "npm",
+	}
+	plan := mustPlanNode(t, fw)
+	runtime := plan.Stages[len(plan.Stages)-1]
+	for _, s := range runtime.Steps {
+		if s.Type == StepHealthcheck {
+			if strings.Contains(s.Args[0], ":80/") {
+				return
+			}
+		}
+	}
+	t.Error("static runtime should have a healthcheck on port 80")
 }

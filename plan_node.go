@@ -95,6 +95,8 @@ func planNode(fw *Framework) (*BuildPlan, error) {
 				},
 			},
 		}
+		addNonRootUser(&runtimeStage, "nginx")
+		addHealthcheck(&runtimeStage, "static", 80)
 	} else {
 		startParts := strings.Fields(fw.StartCommand)
 		if len(startParts) == 0 {
@@ -113,6 +115,9 @@ func planNode(fw *Framework) (*BuildPlan, error) {
 				{Type: StepCmd, Args: startParts},
 			},
 		}
+		addTini(&depsStage, &runtimeStage)
+		addNonRootUser(&runtimeStage, "node")
+		addHealthcheck(&runtimeStage, "node", fw.Port)
 	}
 
 	expose := fw.Port
