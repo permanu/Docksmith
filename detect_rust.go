@@ -13,15 +13,19 @@ func init() {
 	RegisterDetector("rust-actix", detectRustActix)
 }
 
-// cargoToml is a minimal struct for parsing the [package] section of Cargo.toml.
+// cargoToml is a minimal struct for parsing Cargo.toml.
 type cargoToml struct {
 	Package struct {
 		Name string `toml:"name"`
 	} `toml:"package"`
+	Bin []struct {
+		Name string `toml:"name"`
+	} `toml:"bin"`
 }
 
-// cargoPackageName reads [package] name from Cargo.toml in dir.
-// Returns "app" if the file is missing, unreadable, or has no name.
+// cargoPackageName returns the binary name for the project.
+// When [[bin]] is present, the first entry's name takes precedence over
+// [package] name (it's an explicit binary target). Falls back to "app".
 func cargoPackageName(dir string) string {
 	path := filepath.Join(dir, "Cargo.toml")
 	data, err := readFileLimited(path)
@@ -31,6 +35,9 @@ func cargoPackageName(dir string) string {
 	var cargo cargoToml
 	if err := toml.Unmarshal(data, &cargo); err != nil {
 		return "app"
+	}
+	if len(cargo.Bin) > 0 && cargo.Bin[0].Name != "" {
+		return cargo.Bin[0].Name
 	}
 	if cargo.Package.Name == "" {
 		return "app"

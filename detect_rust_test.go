@@ -142,3 +142,25 @@ func TestCargoPackageName_FallbackMissingFile(t *testing.T) {
 		t.Errorf("cargoPackageName = %q, want app", name)
 	}
 }
+
+func TestCargoPackageName_BinSectionTakesPrecedence(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "Cargo.toml",
+		"[package]\nname = \"my-package\"\nversion = \"0.1.0\"\n\n[[bin]]\nname = \"server\"\npath = \"src/main.rs\"\n\n[dependencies]\nactix-web = \"4\"\n",
+	)
+	name := cargoPackageName(dir)
+	if name != "server" {
+		t.Errorf("[[bin]] name should take precedence, got %q, want server", name)
+	}
+}
+
+func TestCargoPackageName_BinSectionFallsToPackage(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "Cargo.toml",
+		"[package]\nname = \"my-crate\"\nversion = \"0.1.0\"\n\n[dependencies]\naxum = \"0.7\"\n",
+	)
+	name := cargoPackageName(dir)
+	if name != "my-crate" {
+		t.Errorf("should fall back to package name, got %q, want my-crate", name)
+	}
+}
