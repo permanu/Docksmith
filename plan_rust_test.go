@@ -9,7 +9,7 @@ func rustActixFramework() *Framework {
 	return &Framework{
 		Name:         "rust-actix",
 		BuildCommand: "cargo build --release",
-		StartCommand: "./target/release/app",
+		StartCommand: "./app",
 		Port:         8080,
 	}
 }
@@ -175,6 +175,37 @@ func TestPlanRust_ValidatesOK(t *testing.T) {
 	if err := plan.Validate(); err != nil {
 		t.Errorf("unexpected validation error: %v", err)
 	}
+}
+
+func TestPlanRust_BuilderCargoLockGlob(t *testing.T) {
+	plan := mustPlanRust(t, rustActixFramework())
+	builder := plan.Stages[0]
+	for _, step := range builder.Steps {
+		if step.Type == StepCopy {
+			for _, arg := range step.Args {
+				if arg == "Cargo.lock" {
+					t.Error("COPY should use Cargo.lock* glob (not exact), to handle missing lockfile")
+				}
+			}
+		}
+	}
+}
+
+func TestPlanRust_DefaultCmdPath(t *testing.T) {
+	fw := &Framework{Name: "rust-axum", BuildCommand: "cargo build --release", Port: 8080}
+	plan := mustPlanRust(t, fw)
+	runtime := plan.Stages[1]
+	for _, step := range runtime.Steps {
+		if step.Type == StepCmd {
+			if len(step.Args) > 0 && strings.Contains(step.Args[0], "target/release") {
+				t.Errorf("default CMD should not reference target/release path, got %v", step.Args)
+			}
+			if len(step.Args) > 0 && step.Args[0] == "./app" {
+				return
+			}
+		}
+	}
+	t.Error("default CMD should be ./app")
 }
 
 func TestPlanRust_FrameworkName(t *testing.T) {

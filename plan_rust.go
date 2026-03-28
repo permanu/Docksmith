@@ -19,7 +19,7 @@ func planRust(fw *Framework) (*BuildPlan, error) {
 
 	startCmd := fw.StartCommand
 	if startCmd == "" {
-		startCmd = "./target/release/app"
+		startCmd = "./app"
 	}
 	startArgs := strings.Fields(startCmd)
 
@@ -30,7 +30,7 @@ func planRust(fw *Framework) (*BuildPlan, error) {
 			{Type: StepRun, Args: []string{"apk add --no-cache musl-dev"}},
 			{Type: StepWorkdir, Args: []string{"/app"}},
 			// Cache dependency compilation by building a stub binary first.
-			{Type: StepCopy, Args: []string{"Cargo.toml", "Cargo.lock", "./"}},
+			{Type: StepCopy, Args: []string{"Cargo.toml", "Cargo.lock*", "./"}},
 			{
 				Type: StepRun,
 				Args: []string{
