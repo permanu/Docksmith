@@ -2,7 +2,9 @@ package docksmith
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,8 +59,8 @@ type RuntimeCfg struct {
 type rawRuntimeCfg struct {
 	Image       string      `toml:"image"       yaml:"image"       json:"image,omitempty"`
 	Expose      int         `toml:"expose"      yaml:"expose"      json:"expose,omitempty"`
-	User        interface{} `toml:"user"        yaml:"user"        json:"user,omitempty"`
-	Healthcheck interface{} `toml:"healthcheck" yaml:"healthcheck" json:"healthcheck,omitempty"`
+	User        any `toml:"user"        yaml:"user"        json:"user,omitempty"`
+	Healthcheck any `toml:"healthcheck" yaml:"healthcheck" json:"healthcheck,omitempty"`
 }
 
 func (r rawRuntimeCfg) normalize() (RuntimeCfg, error) {
@@ -147,7 +149,10 @@ func loadConfigWithNames(dir string, names []string) (*Config, error) {
 		path := filepath.Join(dir, name)
 		data, err := os.ReadFile(path)
 		if err != nil {
-			continue
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			return nil, fmt.Errorf("read %s: %w", name, err)
 		}
 		cfg, parseErr := parseConfig(name, data)
 		if parseErr != nil {
