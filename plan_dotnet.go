@@ -64,6 +64,7 @@ func planDotnet(fw *Framework) (*BuildPlan, error) {
 		if expose <= 0 {
 			expose = 8080
 		}
+		addHealthcheck(&runtime, "dotnet", expose)
 		return &BuildPlan{
 			Framework:    fw.Name,
 			Stages:       []Stage{builder, runtime},

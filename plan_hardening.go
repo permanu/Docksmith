@@ -16,14 +16,16 @@ func addNonRootUser(stage *Stage, builtInUser string) {
 		})
 		return
 	}
+	// Alpine uses addgroup/adduser (BusyBox), Debian uses groupadd/useradd (shadow-utils).
+	// Detect by checking if the stage FROM image contains "alpine".
+	var createCmd string
+	if strings.Contains(stage.From, "alpine") {
+		createCmd = "addgroup -S appgroup && adduser -S -G appgroup appuser"
+	} else {
+		createCmd = "groupadd --system appgroup && useradd --system --no-create-home --gid appgroup appuser"
+	}
 	stage.Steps = append(stage.Steps,
-		Step{
-			Type: StepRun,
-			Args: []string{
-				"groupadd --system appgroup && " +
-					"useradd --system --no-create-home --gid appgroup appuser",
-			},
-		},
+		Step{Type: StepRun, Args: []string{createCmd}},
 		Step{Type: StepUser, Args: []string{"appuser"}},
 	)
 }
