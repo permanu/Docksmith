@@ -3,6 +3,8 @@ package docksmith
 import (
 	"path/filepath"
 	"testing"
+
+	"github.com/permanu/docksmith/plan"
 )
 
 // ---------------------------------------------------------------------------
@@ -43,12 +45,12 @@ func TestLoadConfig_Nested_TOML_UserString(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
-	resolved := resolvePlanConfig(opts)
-	if resolved.user == nil {
+	resolved := plan.ResolvePlanConfig(opts)
+	if resolved.User == nil {
 		t.Fatal("user should be set")
 	}
-	if *resolved.user != "appuser" {
-		t.Errorf("user = %q, want appuser", *resolved.user)
+	if *resolved.User != "appuser" {
+		t.Errorf("user = %q, want appuser", *resolved.User)
 	}
 }
 
@@ -61,12 +63,12 @@ func TestLoadConfig_Nested_TOML_UserFalse_DisablesUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
-	resolved := resolvePlanConfig(opts)
-	if resolved.user == nil {
+	resolved := plan.ResolvePlanConfig(opts)
+	if resolved.User == nil {
 		t.Fatal("user pointer should be non-nil when set to false")
 	}
-	if *resolved.user != "" {
-		t.Errorf("user = %q, want empty string (disabled)", *resolved.user)
+	if *resolved.User != "" {
+		t.Errorf("user = %q, want empty string (disabled)", *resolved.User)
 	}
 }
 
@@ -79,12 +81,12 @@ func TestLoadConfig_Nested_TOML_HealthcheckDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
-	resolved := resolvePlanConfig(opts)
-	if resolved.healthcheck == nil {
+	resolved := plan.ResolvePlanConfig(opts)
+	if resolved.Healthcheck == nil {
 		t.Fatal("healthcheck pointer should be non-nil when set to false")
 	}
-	if *resolved.healthcheck != "" {
-		t.Errorf("healthcheck = %q, want empty string (disabled)", *resolved.healthcheck)
+	if *resolved.Healthcheck != "" {
+		t.Errorf("healthcheck = %q, want empty string (disabled)", *resolved.Healthcheck)
 	}
 }
 
@@ -97,12 +99,12 @@ func TestLoadConfig_Nested_TOML_HealthcheckString(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
-	resolved := resolvePlanConfig(opts)
-	if resolved.healthcheck == nil {
+	resolved := plan.ResolvePlanConfig(opts)
+	if resolved.Healthcheck == nil {
 		t.Fatal("healthcheck should be set")
 	}
-	if *resolved.healthcheck != "curl -f http://localhost:8080/health" {
-		t.Errorf("healthcheck = %q, want curl command", *resolved.healthcheck)
+	if *resolved.Healthcheck != "curl -f http://localhost:8080/health" {
+		t.Errorf("healthcheck = %q, want curl command", *resolved.Healthcheck)
 	}
 }
 
@@ -115,12 +117,12 @@ func TestLoadPlanOptions_ReturnsOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	resolved := resolvePlanConfig(opts)
-	if resolved.expose == nil {
+	resolved := plan.ResolvePlanConfig(opts)
+	if resolved.Expose == nil {
 		t.Fatal("expose should be set from nested config")
 	}
-	if *resolved.expose != 9090 {
-		t.Errorf("expose = %d, want 9090", *resolved.expose)
+	if *resolved.Expose != 9090 {
+		t.Errorf("expose = %d, want 9090", *resolved.Expose)
 	}
 }
 
@@ -149,9 +151,9 @@ func TestToPlanOptions_BuildCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
-	resolved := resolvePlanConfig(opts)
-	if resolved.buildCmd == nil || *resolved.buildCmd != "make build" {
-		t.Errorf("buildCmd = %v, want make build", resolved.buildCmd)
+	resolved := plan.ResolvePlanConfig(opts)
+	if resolved.BuildCmd == nil || *resolved.BuildCmd != "make build" {
+		t.Errorf("buildCmd = %v, want make build", resolved.BuildCmd)
 	}
 }
 
@@ -164,9 +166,9 @@ func TestToPlanOptions_StartCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
-	resolved := resolvePlanConfig(opts)
-	if resolved.startCmd == nil || *resolved.startCmd != "node dist/index.js" {
-		t.Errorf("startCmd = %v, want node dist/index.js", resolved.startCmd)
+	resolved := plan.ResolvePlanConfig(opts)
+	if resolved.StartCmd == nil || *resolved.StartCmd != "node dist/index.js" {
+		t.Errorf("startCmd = %v, want node dist/index.js", resolved.StartCmd)
 	}
 }
 
@@ -180,9 +182,9 @@ func TestToPlanOptions_ExtraEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
-	resolved := resolvePlanConfig(opts)
-	if resolved.extraEnv == nil || resolved.extraEnv["PORT"] != "8000" {
-		t.Errorf("extraEnv = %v, want PORT=8000", resolved.extraEnv)
+	resolved := plan.ResolvePlanConfig(opts)
+	if resolved.ExtraEnv == nil || resolved.ExtraEnv["PORT"] != "8000" {
+		t.Errorf("extraEnv = %v, want PORT=8000", resolved.ExtraEnv)
 	}
 }
 
@@ -196,9 +198,9 @@ func TestToPlanOptions_SystemDeps(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
-	resolved := resolvePlanConfig(opts)
-	if len(resolved.systemDeps) != 2 || resolved.systemDeps[0] != "libpq-dev" {
-		t.Errorf("systemDeps = %v, want [libpq-dev curl]", resolved.systemDeps)
+	resolved := plan.ResolvePlanConfig(opts)
+	if len(resolved.SystemDeps) != 2 || resolved.SystemDeps[0] != "libpq-dev" {
+		t.Errorf("systemDeps = %v, want [libpq-dev curl]", resolved.SystemDeps)
 	}
 }
 
@@ -212,8 +214,8 @@ func TestToPlanOptions_NoBuildCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
-	resolved := resolvePlanConfig(opts)
-	if !resolved.noBuildCache {
+	resolved := plan.ResolvePlanConfig(opts)
+	if !resolved.NoBuildCache {
 		t.Error("noBuildCache should be true")
 	}
 }
@@ -230,9 +232,9 @@ func TestToPlanOptions_RuntimeImage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
-	resolved := resolvePlanConfig(opts)
-	if resolved.runtimeImage == nil || *resolved.runtimeImage != "gcr.io/distroless/static:nonroot" {
-		t.Errorf("runtimeImage = %v, want distroless", resolved.runtimeImage)
+	resolved := plan.ResolvePlanConfig(opts)
+	if resolved.RuntimeImage == nil || *resolved.RuntimeImage != "gcr.io/distroless/static:nonroot" {
+		t.Errorf("runtimeImage = %v, want distroless", resolved.RuntimeImage)
 	}
 }
 

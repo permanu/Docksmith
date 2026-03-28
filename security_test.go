@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/permanu/docksmith/plan"
 )
 
 func TestSanitizeDockerfileArg_injection(t *testing.T) {
@@ -60,7 +62,7 @@ func TestSanitizeAppID_traversal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := sanitizeAppID(tt.input)
+			got := plan.SanitizeAppID(tt.input)
 			if tt.reject != "" && strings.Contains(got, tt.reject) {
 				t.Errorf("output %q still contains %q", got, tt.reject)
 			}

@@ -1,6 +1,10 @@
 package docksmith
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/permanu/docksmith/core"
+)
 
 // baseIgnorePatterns are included for every runtime.
 var baseIgnorePatterns = []string{
@@ -31,31 +35,31 @@ func GenerateDockerignore(fw *Framework) string {
 
 func runtimeIgnorePatterns(name string) []string {
 	switch {
-	case isNodeFramework(name) || isDenoFramework(name):
+	case core.IsNodeFramework(name) || core.IsDenoFramework(name):
 		return []string{"node_modules", ".next", ".nuxt", "dist", "build", ".cache", "coverage"}
 
-	case isBunFramework(name):
+	case core.IsBunFramework(name):
 		return []string{"node_modules", ".next", "dist", "build", ".cache", "coverage"}
 
-	case isPythonFramework(name):
+	case core.IsPythonFramework(name):
 		return []string{"__pycache__", "*.pyc", ".venv", "venv", ".pytest_cache", ".mypy_cache", "*.egg-info"}
 
-	case isGoFramework(name):
+	case core.IsGoFramework(name):
 		return []string{"vendor", "*.test", "*.out"}
 
-	case isRubyFramework(name):
+	case core.IsRubyFramework(name):
 		return []string{".bundle", "vendor/bundle", "log", "tmp"}
 
-	case isPHPFramework(name):
+	case core.IsPHPFramework(name):
 		return []string{"vendor", "storage/logs", "bootstrap/cache"}
 
-	case isJavaFramework(name):
+	case core.IsJavaFramework(name):
 		return []string{"target", "build", ".gradle", "*.class", "*.jar"}
 
-	case isRustFramework(name):
+	case core.IsRustFramework(name):
 		return []string{"target"}
 
-	case isDotnetFramework(name):
+	case core.IsDotnetFramework(name):
 		return []string{"bin", "obj", "*.user", "*.suo"}
 
 	default:

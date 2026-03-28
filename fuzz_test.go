@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/permanu/docksmith/config"
+	"github.com/permanu/docksmith/plan"
 )
 
 func FuzzSanitizeDockerfileArg(f *testing.F) {
@@ -25,7 +26,7 @@ func FuzzSanitizeAppID(f *testing.F) {
 	f.Add("....")
 	f.Add("")
 	f.Fuzz(func(t *testing.T, s string) {
-		out := sanitizeAppID(s)
+		out := plan.SanitizeAppID(s)
 		if strings.Contains(out, "..") {
 			t.Fatalf("output contains '..': %q", out)
 		}

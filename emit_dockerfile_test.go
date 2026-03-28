@@ -17,11 +17,11 @@ func mustNodePlan(t *testing.T) *BuildPlan {
 		Port:           3000,
 		StartCommand:   "node server.js",
 	}
-	plan, err := planNode(fw)
+	p, err := Plan(fw)
 	if err != nil {
-		t.Fatalf("planNode: %v", err)
+		t.Fatalf("Plan(nextjs): %v", err)
 	}
-	return plan
+	return p
 }
 
 func mustPythonPlan(t *testing.T) *BuildPlan {
@@ -33,11 +33,11 @@ func mustPythonPlan(t *testing.T) *BuildPlan {
 		Port:          8000,
 		StartCommand:  "gunicorn myapp.wsgi:application",
 	}
-	plan, err := planPython(fw)
+	p, err := Plan(fw)
 	if err != nil {
-		t.Fatalf("planPython: %v", err)
+		t.Fatalf("Plan(django): %v", err)
 	}
-	return plan
+	return p
 }
 
 func mustGoPlan(t *testing.T) *BuildPlan {
@@ -47,11 +47,11 @@ func mustGoPlan(t *testing.T) *BuildPlan {
 		GoVersion: "1.26",
 		Port:      8080,
 	}
-	plan, err := planGo(fw)
+	p, err := Plan(fw)
 	if err != nil {
-		t.Fatalf("planGo: %v", err)
+		t.Fatalf("Plan(go): %v", err)
 	}
-	return plan
+	return p
 }
 
 func mustStaticPlan(t *testing.T) *BuildPlan {
@@ -61,11 +61,11 @@ func mustStaticPlan(t *testing.T) *BuildPlan {
 		OutputDir: "public",
 		Port:      0,
 	}
-	plan, err := planStatic(fw)
+	p, err := Plan(fw)
 	if err != nil {
-		t.Fatalf("planStatic: %v", err)
+		t.Fatalf("Plan(static): %v", err)
 	}
-	return plan
+	return p
 }
 
 // Node.js plan ------------------------------------------------------------

@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/permanu/docksmith/plan"
 )
 
 func TestPipeline_adversarialFrameworks(t *testing.T) {
@@ -291,7 +293,7 @@ func TestBuildkitCacheArgs_adversarial(t *testing.T) {
 				}
 			}
 
-			id := sanitizeAppID(tc.appID)
+			id := plan.SanitizeAppID(tc.appID)
 			if id == "" {
 				t.Error("sanitizeAppID returned empty")
 			}
