@@ -49,6 +49,18 @@ func planNode(fw *core.Framework) (*core.BuildPlan, error) {
 	if pm == "" {
 		pm = "npm"
 	}
+	// If the user override (BuildCommand) explicitly uses a different package manager,
+	// switch to that PM so the install step is consistent with the build step.
+	if fw.BuildCommand != "" {
+		switch {
+		case strings.HasPrefix(fw.BuildCommand, "npm ") || strings.Contains(fw.BuildCommand, "npm install"):
+			pm = "npm"
+		case strings.HasPrefix(fw.BuildCommand, "yarn ") || strings.Contains(fw.BuildCommand, "yarn install"):
+			pm = "yarn"
+		case strings.HasPrefix(fw.BuildCommand, "pnpm ") || strings.Contains(fw.BuildCommand, "pnpm install"):
+			pm = "pnpm"
+		}
+	}
 	nodeImg := ResolveDockerTag("node", fw.NodeVersion)
 	installCmd := detect.PMInstallCommand(pm)
 
