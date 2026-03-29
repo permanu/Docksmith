@@ -95,6 +95,7 @@ var (
 // ---------------------------------------------------------------------------
 
 var FrameworkFromJSON = core.FrameworkFromJSON
+var ValidateContextRoot = config.ValidateContextRoot
 
 // Plan option constructors
 var (
@@ -111,6 +112,7 @@ var (
 	WithStartCommand        = plan.WithStartCommand
 	WithSystemDeps          = plan.WithSystemDeps
 	WithBuildCacheDisabled  = plan.WithBuildCacheDisabled
+	WithContextRoot        = plan.WithContextRoot
 )
 
 var ResolveDockerTag = plan.ResolveDockerTag
@@ -276,6 +278,10 @@ func ConfigToPlanOptions(c *Config) ([]PlanOption, error) {
 		} else {
 			opts = append(opts, WithHealthcheck(c.RuntimeConfig.Healthcheck))
 		}
+	}
+
+	if c.ContextRoot != "" {
+		opts = append(opts, WithContextRoot(c.ContextRoot))
 	}
 
 	return opts, nil

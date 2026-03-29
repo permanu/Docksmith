@@ -16,6 +16,7 @@ type PlanConfig struct {
 	StartCmd     *string
 	SystemDeps   []string
 	NoBuildCache bool
+	ContextRoot  *string // app subdirectory relative to context root, e.g. "apps/frontend"
 }
 
 // planConfig is an internal alias kept for transition clarity.
@@ -83,6 +84,12 @@ func WithSystemDeps(deps ...string) PlanOption {
 
 func WithBuildCacheDisabled() PlanOption {
 	return planOptionFunc(func(c *planConfig) { c.NoBuildCache = true })
+}
+
+// WithContextRoot sets the app subdirectory relative to the context root.
+// E.g. "apps/frontend" when the build context is the repo root.
+func WithContextRoot(appSubdir string) PlanOption {
+	return planOptionFunc(func(c *planConfig) { c.ContextRoot = &appSubdir })
 }
 
 // ResolvePlanConfig resolves a slice of PlanOption into a PlanConfig.
