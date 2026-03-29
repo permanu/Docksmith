@@ -53,6 +53,7 @@ type RuntimeCfg = config.RuntimeCfg
 // Detect types
 type NamedDetector = detect.NamedDetector
 type DetectOptions = detect.DetectOptions
+type SecretDef = detect.SecretDef
 
 // Plan option type
 type PlanOption = plan.PlanOption
@@ -117,6 +118,9 @@ var ResolveDockerTag = plan.ResolveDockerTag
 var FrameworkDefaults = plan.FrameworkDefaults
 var BuildkitCacheArgs = plan.BuildkitCacheArgs
 var CacheDir = plan.CacheDir
+var ApplySecretMounts = plan.ApplySecretMounts
+var SecretBuildHint = plan.SecretBuildHint
+var SecretIgnoreFiles = plan.SecretIgnoreFiles
 
 // Registry function aliases
 var FetchRegistryIndex = registry.FetchIndex
@@ -146,6 +150,8 @@ func Build(dir string, opts ...PlanOption) (string, *Framework, error) {
 }
 
 // BuildWithOptions runs the pipeline with custom detection options.
+// When private registry indicators are found, secret mounts are wired
+// into the plan and a build hint comment is prepended to the Dockerfile.
 func BuildWithOptions(dir string, detectOpts DetectOptions, planOpts ...PlanOption) (string, *Framework, error) {
 	fw, err := DetectWithOptions(dir, detectOpts)
 	if err != nil {
@@ -158,7 +164,12 @@ func BuildWithOptions(dir string, detectOpts DetectOptions, planOpts ...PlanOpti
 	if err != nil {
 		return "", fw, err
 	}
-	return EmitDockerfile(p), fw, nil
+	secrets := ApplySecretMounts(p, dir)
+	df := EmitDockerfile(p)
+	if hint := SecretBuildHint(secrets); hint != "" {
+		df = hint + df
+	}
+	return df, fw, nil
 }
 
 // ---------------------------------------------------------------------------

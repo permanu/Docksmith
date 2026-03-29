@@ -1,0 +1,5 @@
+source "https://rubygems.org"
+source "https://gems.mycompany.com"
+
+gem "rails", "~> 7.1"
+gem "mycompany-auth", "~> 2.0"
