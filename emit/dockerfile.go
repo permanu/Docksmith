@@ -1,3 +1,6 @@
+// Package emit serializes a BuildPlan into a Dockerfile string.
+// The output is standard Dockerfile syntax with multi-stage builds,
+// BuildKit cache mounts, and no proprietary extensions.
 package emit
 
 import (

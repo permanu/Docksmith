@@ -1,3 +1,6 @@
+// Package core defines the shared types used across all docksmith layers:
+// Framework (detection result), BuildPlan (abstract build steps), Stage,
+// Step, CacheMount, and SecretMount.
 package core
 
 import (

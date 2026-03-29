@@ -1,3 +1,8 @@
+// Package detect identifies application frameworks from project files.
+// It scans for package.json, go.mod, requirements.txt, Cargo.toml, and
+// similar markers to determine the framework, runtime version, and
+// package manager. 45 detectors are registered at init time; custom
+// detectors can be added via RegisterDetector.
 package detect
 
 import (

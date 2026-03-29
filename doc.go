@@ -12,6 +12,6 @@
 // into abstract build steps. EmitDockerfile serializes a plan into
 // a multi-stage Dockerfile with cache mounts and non-root users.
 //
-// Detection supports 50+ frameworks across 12 runtimes. Custom
+// Detection supports 45 frameworks across 12 runtimes. Custom
 // frameworks can be added via YAML definitions or RegisterDetector.
 package docksmith

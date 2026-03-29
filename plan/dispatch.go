@@ -1,3 +1,7 @@
+// Package plan converts a detected Framework into an abstract BuildPlan.
+// It selects base images, build stages, hardening steps (non-root user,
+// tini, health checks, distroless), and BuildKit cache mounts based on
+// the runtime. Plans are pure data — no I/O, no side effects.
 package plan
 
 import (
