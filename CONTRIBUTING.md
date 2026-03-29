@@ -51,14 +51,12 @@ For frameworks needing complex detection logic:
 2. Register in the `detectors` slice in `detect.go`
 3. Add plan builder in `plan_<runtime>.go`
 4. Add testdata fixtures in `testdata/fixtures/<framework>/`
-5. Add golden Dockerfile in `testdata/golden/<framework>.dockerfile`
 
 ## Development
 
 ```bash
 make check    # build + vet + test + lint
 make test     # tests with race detector
-make bench    # benchmarks
 make lint     # golangci-lint
 ```
 
@@ -68,7 +66,7 @@ make lint     # golangci-lint
 2. Write tests first (TDD)
 3. Run `make check` — all gates must pass
 4. Keep changes focused — one feature or fix per PR
-5. Update golden files if Dockerfile output changed: `go test -update`
+5. Verify all tests pass with `make test`
 
 ## Code Style
 

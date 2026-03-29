@@ -1,4 +1,4 @@
-.PHONY: build test lint vet check bench clean fmt
+.PHONY: build test lint vet check clean fmt
 
 BIN := bin/docksmith
 
@@ -7,9 +7,6 @@ build:
 
 test:
 	go test -race -count=1 -coverprofile=cover.out ./...
-
-bench:
-	go test -bench=. -benchmem -run=^$$ ./...
 
 vet:
 	go vet ./...

@@ -1,9 +1,11 @@
 package plan
 
 import (
-	"github.com/permanu/docksmith/core"
 	"fmt"
 	"sort"
+	"strings"
+
+	"github.com/permanu/docksmith/core"
 )
 
 // Plan converts a detected Framework into a BuildPlan.
@@ -54,17 +56,121 @@ func Plan(fw *core.Framework, opts ...PlanOption) (*core.BuildPlan, error) {
 	return plan, nil
 }
 
-// applyPlanOverrides modifies the last stage of plan based on cfg.
+// applyPlanOverrides modifies the plan based on cfg.
 // The last stage is always the runtime stage across all plan builders.
+// The first stage is the deps/builder stage where install happens.
 func applyPlanOverrides(plan *core.BuildPlan, cfg *planConfig) {
 	if len(plan.Stages) == 0 {
 		return
 	}
 
+	first := &plan.Stages[0]
 	last := &plan.Stages[len(plan.Stages)-1]
+	isSingleStage := len(plan.Stages) == 1
 
-	if cfg.RuntimeImage != nil {
-		last.From = *cfg.RuntimeImage
+	if isSingleStage {
+		// For single-stage plans, first and last alias the same stage.
+		// Apply all overrides to the single stage in a sensible order:
+		// base image first, then system deps, then install, then start command.
+
+		// --- Base image override (BaseImage takes priority, RuntimeImage as fallback) ---
+		if cfg.BaseImage != nil {
+			first.From = *cfg.BaseImage
+		} else if cfg.RuntimeImage != nil {
+			first.From = *cfg.RuntimeImage
+		}
+
+		// --- System dependencies ---
+		if len(cfg.SystemDeps) > 0 {
+			depList := strings.Join(cfg.SystemDeps, " ")
+			var installCmd string
+			if strings.Contains(first.From, "alpine") {
+				installCmd = "apk add --no-cache " + depList
+			} else {
+				installCmd = "apt-get update -qq && apt-get install -y --no-install-recommends " + depList + " && rm -rf /var/lib/apt/lists/*"
+			}
+			sysStep := core.Step{Type: core.StepRun, Args: []string{installCmd}}
+			insertIdx := 0
+			for i, s := range first.Steps {
+				if s.Type == core.StepWorkdir {
+					insertIdx = i + 1
+				} else {
+					break
+				}
+			}
+			first.Steps = append(first.Steps[:insertIdx], append([]core.Step{sysStep}, first.Steps[insertIdx:]...)...)
+		}
+
+		// --- Install command override ---
+		if cfg.InstallCmd != nil {
+			replaceLastRun(first, *cfg.InstallCmd)
+		}
+	} else {
+		// Multi-stage: first is the builder, last is runtime.
+
+		// --- Base image override: replace the first stage's FROM ---
+		if cfg.BaseImage != nil {
+			first.From = *cfg.BaseImage
+		}
+
+		if cfg.RuntimeImage != nil {
+			last.From = *cfg.RuntimeImage
+		}
+
+		// --- System dependencies: prepend install step to the first stage ---
+		if len(cfg.SystemDeps) > 0 {
+			depList := strings.Join(cfg.SystemDeps, " ")
+			var installCmd string
+			if strings.Contains(first.From, "alpine") {
+				installCmd = "apk add --no-cache " + depList
+			} else {
+				installCmd = "apt-get update -qq && apt-get install -y --no-install-recommends " + depList + " && rm -rf /var/lib/apt/lists/*"
+			}
+			sysStep := core.Step{Type: core.StepRun, Args: []string{installCmd}}
+			insertIdx := 0
+			for i, s := range first.Steps {
+				if s.Type == core.StepWorkdir {
+					insertIdx = i + 1
+				} else {
+					break
+				}
+			}
+			first.Steps = append(first.Steps[:insertIdx], append([]core.Step{sysStep}, first.Steps[insertIdx:]...)...)
+		}
+
+		// --- Install command override: replace the last RUN step in the first stage ---
+		if cfg.InstallCmd != nil {
+			replaceLastRun(first, *cfg.InstallCmd)
+		}
+	}
+
+	// --- Build command override: replace the last RUN step in the build stage ---
+	if cfg.BuildCmd != nil {
+		buildStage := findStageByName(plan, "build")
+		if buildStage != nil {
+			replaceLastRun(buildStage, *cfg.BuildCmd)
+		} else if len(plan.Stages) > 1 {
+			// Fallback: use the second-to-last stage if no explicit "build" stage.
+			replaceLastRun(&plan.Stages[len(plan.Stages)-2], *cfg.BuildCmd)
+		}
+	}
+
+	// --- Start command override: replace the CMD step in the runtime stage ---
+	if cfg.StartCmd != nil {
+		removeSteps(last, core.StepCmd)
+		last.Steps = append(last.Steps, core.Step{
+			Type: core.StepCmd,
+			Args: strings.Fields(*cfg.StartCmd),
+		})
+	}
+
+	// --- Build cache disabled: strip all cache mounts across all stages ---
+	if cfg.NoBuildCache {
+		for i := range plan.Stages {
+			for j := range plan.Stages[i].Steps {
+				plan.Stages[i].Steps[j].CacheMount = nil
+			}
+		}
 	}
 
 	if cfg.Expose != nil {
@@ -101,6 +207,28 @@ func applyPlanOverrides(plan *core.BuildPlan, cfg *planConfig) {
 			last.Steps = append(last.Steps, core.Step{Type: core.StepEnv, Args: []string{k, cfg.ExtraEnv[k]}})
 		}
 	}
+}
+
+// findStageByName returns a pointer to the named stage, or nil.
+func findStageByName(plan *core.BuildPlan, name string) *core.Stage {
+	for i := range plan.Stages {
+		if plan.Stages[i].Name == name {
+			return &plan.Stages[i]
+		}
+	}
+	return nil
+}
+
+// replaceLastRun replaces the last StepRun in a stage with the given command.
+func replaceLastRun(stage *core.Stage, cmd string) {
+	for i := len(stage.Steps) - 1; i >= 0; i-- {
+		if stage.Steps[i].Type == core.StepRun {
+			stage.Steps[i].Args = []string{cmd}
+			return
+		}
+	}
+	// No existing RUN step — append one.
+	stage.Steps = append(stage.Steps, core.Step{Type: core.StepRun, Args: []string{cmd}})
 }
 
 func removeSteps(stage *core.Stage, t core.StepType) {

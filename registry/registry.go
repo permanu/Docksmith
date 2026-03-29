@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -18,6 +20,17 @@ const maxHTTPResponseBytes = 10 << 20 // 10 MB
 const DefaultRegistryURL = "https://raw.githubusercontent.com/permanu/docksmith-registry/main/index.json"
 
 const registryCacheTTL = 24 * time.Hour
+
+// allowInsecureHTTP is a test-only hook to permit http:// URLs in unit tests.
+// Production code must never enable this.
+var allowInsecureHTTP atomic.Bool
+
+// SetAllowInsecureHTTP enables or disables the test-only insecure HTTP hook.
+// This is intended exclusively for test code using httptest servers.
+func SetAllowInsecureHTTP(v bool) { allowInsecureHTTP.Store(v) }
+
+// isInsecureHTTPAllowed reports whether insecure HTTP URLs are currently permitted.
+func isInsecureHTTPAllowed() bool { return allowInsecureHTTP.Load() }
 
 // Index holds the framework registry metadata.
 type Index struct {
@@ -39,10 +52,21 @@ type Entry struct {
 }
 
 // FetchIndex downloads and parses the registry index.
-// Caches at ~/.docksmith/cache/index.json with a 24h TTL.
+// Caches at ~/.docksmith/cache/<url-hash>.json with a 24h TTL, keyed by URL.
 // Pass offline=true to use only the cache (no network call).
+//
+// Security: the index is fetched over TLS from the registryURL. If an attacker
+// can MITM the TLS connection (or compromise the upstream repository), they can
+// substitute both the download URL and the SHA256 in the index — the checksum
+// only guards against download corruption, not index authenticity. Pinning the
+// index itself would require a signature scheme (not yet implemented).
+// TLS-only is enforced: non-HTTPS registry URLs are rejected in production.
 func FetchIndex(registryURL string, offline bool) (*Index, error) {
-	cachePath, err := registryCachePath()
+	if !isInsecureHTTPAllowed() && !strings.HasPrefix(registryURL, "https://") {
+		return nil, fmt.Errorf("registry: refusing non-HTTPS registry URL %q", registryURL)
+	}
+
+	cachePath, err := registryCachePath(registryURL)
 	if err != nil {
 		return nil, fmt.Errorf("registry cache path: %w", err)
 	}
@@ -59,7 +83,7 @@ func FetchIndex(registryURL string, offline bool) (*Index, error) {
 }
 
 // Search finds entries whose name, runtime, or description contains query.
-// Returns entries sorted by name (map iteration order is random).
+// Returns entries sorted by name.
 func Search(index *Index, query string) []Entry {
 	q := strings.ToLower(query)
 	var results []Entry
@@ -72,41 +96,74 @@ func Search(index *Index, query string) []Entry {
 			results = append(results, e)
 		}
 	}
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Name < results[j].Name
+	})
 	return results
 }
 
 // InstallFramework downloads a framework YAML to ~/.docksmith/frameworks/.
-// Verifies SHA256 checksum when provided in the registry entry.
+// Verifies SHA256 checksum (required — entries without sha256 are rejected).
+//
+// Security: the SHA256 checksum guards against download corruption and partial
+// tampering, but it comes from the same registry index as the URL. If the index
+// itself is poisoned (MITM on TLS, compromised upstream repo), the attacker can
+// change both fields. TLS-only enforcement on FetchIndex is the primary defence.
 func InstallFramework(entry Entry) (string, error) {
 	if entry.URL == "" {
 		return "", fmt.Errorf("install %s: entry has no URL", entry.Name)
 	}
+	if !isInsecureHTTPAllowed() && !strings.HasPrefix(entry.URL, "https://") {
+		return "", fmt.Errorf("install %s: refusing non-HTTPS download URL %q", entry.Name, entry.URL)
+	}
+
+	// Sanitize entry.Name to prevent path traversal.
+	safeName := filepath.Base(entry.Name)
+	if safeName != entry.Name || safeName == "." || safeName == ".." ||
+		strings.ContainsAny(entry.Name, `/\`) || strings.Contains(entry.Name, "..") ||
+		strings.Contains(entry.Name, "\x00") {
+		return "", fmt.Errorf("install: invalid framework name %q", entry.Name)
+	}
 
 	destDir, err := userFrameworksDir()
 	if err != nil {
-		return "", fmt.Errorf("install %s: %w", entry.Name, err)
+		return "", fmt.Errorf("install %s: %w", safeName, err)
 	}
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		return "", fmt.Errorf("install %s: create dir: %w", entry.Name, err)
+		return "", fmt.Errorf("install %s: create dir: %w", safeName, err)
 	}
 
 	data, err := fetchURL(entry.URL)
 	if err != nil {
-		return "", fmt.Errorf("install %s: fetch: %w", entry.Name, err)
+		return "", fmt.Errorf("install %s: fetch: %w", safeName, err)
 	}
 
 	if entry.SHA256 == "" {
-		return "", fmt.Errorf("install %s: registry entry missing sha256 checksum", entry.Name)
+		return "", fmt.Errorf("install %s: registry entry missing sha256 checksum", safeName)
 	}
 	got := sha256.Sum256(data)
 	gotHex := hex.EncodeToString(got[:])
 	if gotHex != strings.ToLower(entry.SHA256) {
-		return "", fmt.Errorf("install %s: sha256 mismatch: got %s, want %s", entry.Name, gotHex, entry.SHA256)
+		return "", fmt.Errorf("install %s: sha256 mismatch: got %s, want %s", safeName, gotHex, entry.SHA256)
 	}
 
-	dest := filepath.Join(destDir, entry.Name+".yaml")
+	dest := filepath.Join(destDir, safeName+".yaml")
+
+	// Final safety check: resolved path must be inside destDir.
+	absDir, err2 := filepath.Abs(destDir)
+	if err2 != nil {
+		return "", fmt.Errorf("install %s: resolve dest dir: %w", safeName, err2)
+	}
+	absDest, err2 := filepath.Abs(dest)
+	if err2 != nil {
+		return "", fmt.Errorf("install %s: resolve dest path: %w", safeName, err2)
+	}
+	if !strings.HasPrefix(absDest, absDir+string(filepath.Separator)) {
+		return "", fmt.Errorf("install %s: path escapes destination directory", safeName)
+	}
+
 	if err := os.WriteFile(dest, data, 0o644); err != nil {
-		return "", fmt.Errorf("install %s: write: %w", entry.Name, err)
+		return "", fmt.Errorf("install %s: write: %w", safeName, err)
 	}
 	return dest, nil
 }
@@ -167,12 +224,16 @@ func fetchURL(url string) ([]byte, error) {
 	return data, nil
 }
 
-func registryCachePath() (string, error) {
+// registryCachePath returns a cache file path keyed by registry URL to prevent
+// cross-URL cache poisoning.
+func registryCachePath(registryURL string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".docksmith", "cache", "index.json"), nil
+	h := sha256.Sum256([]byte(registryURL))
+	name := "index-" + hex.EncodeToString(h[:]) + ".json"
+	return filepath.Join(home, ".docksmith", "cache", name), nil
 }
 
 func userFrameworksDir() (string, error) {

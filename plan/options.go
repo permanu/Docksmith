@@ -67,6 +67,8 @@ func WithInstallCommand(cmd string) PlanOption {
 	return planOptionFunc(func(c *planConfig) { c.InstallCmd = &cmd })
 }
 
+// WithBuildCommand overrides the build step command. This is a no-op for
+// single-stage plans that have no explicit "build" stage.
 func WithBuildCommand(cmd string) PlanOption {
 	return planOptionFunc(func(c *planConfig) { c.BuildCmd = &cmd })
 }

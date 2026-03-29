@@ -15,6 +15,11 @@ import (
 	"github.com/permanu/docksmith/registry"
 )
 
+func init() {
+	// Tests use httptest servers which serve over HTTP.
+	registry.SetAllowInsecureHTTP(true)
+}
+
 var sampleIndex = registry.Index{
 	Version: 1,
 	Frameworks: map[string]registry.Entry{
@@ -48,6 +53,13 @@ func marshalIndex(t *testing.T, idx registry.Index) []byte {
 	return data
 }
 
+// cachePath computes the expected cache file for a given registry URL.
+func cachePath(home, registryURL string) string {
+	h := sha256.Sum256([]byte(registryURL))
+	name := "index-" + hex.EncodeToString(h[:]) + ".json"
+	return filepath.Join(home, ".docksmith", "cache", name)
+}
+
 func TestFetchIndex_fromServer(t *testing.T) {
 	payload := marshalIndex(t, sampleIndex)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -76,16 +88,17 @@ func TestFetchIndex_cacheTTL(t *testing.T) {
 	cacheDir := t.TempDir()
 	t.Setenv("HOME", cacheDir)
 
-	cachePath := filepath.Join(cacheDir, ".docksmith", "cache", "index.json")
-	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
+	registryURL := "http://should-not-be-called"
+	cp := cachePath(cacheDir, registryURL)
+	if err := os.MkdirAll(filepath.Dir(cp), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(cachePath, marshalIndex(t, sampleIndex), 0o644); err != nil {
+	if err := os.WriteFile(cp, marshalIndex(t, sampleIndex), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	// Fresh cache — should use it without hitting network.
-	idx, err := registry.FetchIndex("http://should-not-be-called", false)
+	idx, err := registry.FetchIndex(registryURL, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -98,19 +111,6 @@ func TestFetchIndex_expiredCache(t *testing.T) {
 	cacheDir := t.TempDir()
 	t.Setenv("HOME", cacheDir)
 
-	cachePath := filepath.Join(cacheDir, ".docksmith", "cache", "index.json")
-	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(cachePath, marshalIndex(t, sampleIndex), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	// Backdate the file by 25 hours to simulate expiry.
-	old := time.Now().Add(-25 * time.Hour)
-	if err := os.Chtimes(cachePath, old, old); err != nil {
-		t.Fatal(err)
-	}
-
 	calls := 0
 	fresh := registry.Index{Version: 2, Frameworks: map[string]registry.Entry{
 		"newfw": {Version: "0.0.1"},
@@ -120,6 +120,20 @@ func TestFetchIndex_expiredCache(t *testing.T) {
 		w.Write(marshalIndex(t, fresh))
 	}))
 	defer srv.Close()
+
+	// Seed cache for this server URL.
+	cp := cachePath(cacheDir, srv.URL)
+	if err := os.MkdirAll(filepath.Dir(cp), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cp, marshalIndex(t, sampleIndex), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Backdate the file by 25 hours to simulate expiry.
+	old := time.Now().Add(-25 * time.Hour)
+	if err := os.Chtimes(cp, old, old); err != nil {
+		t.Fatal(err)
+	}
 
 	idx, err := registry.FetchIndex(srv.URL, false)
 	if err != nil {
@@ -155,6 +169,20 @@ func TestFetchIndex_serverError(t *testing.T) {
 	_, err := registry.FetchIndex(srv.URL, false)
 	if err == nil {
 		t.Fatal("expected error for server 500")
+	}
+}
+
+func TestFetchIndex_rejectsHTTP(t *testing.T) {
+	// Temporarily disable the test hook.
+	registry.SetAllowInsecureHTTP(false)
+	defer registry.SetAllowInsecureHTTP(true)
+
+	cacheDir := t.TempDir()
+	t.Setenv("HOME", cacheDir)
+
+	_, err := registry.FetchIndex("http://example.com/index.json", false)
+	if err == nil {
+		t.Fatal("expected error for non-HTTPS registry URL")
 	}
 }
 
@@ -203,6 +231,18 @@ func TestSearch_emptyQuery(t *testing.T) {
 	}
 }
 
+func TestSearch_sortedByName(t *testing.T) {
+	results := registry.Search(&sampleIndex, "")
+	if len(results) < 2 {
+		t.Skip("need at least 2 results to test sorting")
+	}
+	for i := 1; i < len(results); i++ {
+		if results[i-1].Name > results[i].Name {
+			t.Errorf("results not sorted: %q > %q", results[i-1].Name, results[i].Name)
+		}
+	}
+}
+
 func TestInstallFramework_writesFile(t *testing.T) {
 	yamlContent := "name: gleam\nruntime: erlang\n"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -248,5 +288,49 @@ func TestInstallFramework_noURL(t *testing.T) {
 	_, err := registry.InstallFramework(entry)
 	if err == nil {
 		t.Fatal("expected error for entry with no URL")
+	}
+}
+
+func TestInstallFramework_pathTraversal(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{"../etc/passwd"},
+		{"../../evil"},
+		{"foo/bar"},
+		{`foo\bar`},
+		{".."},
+		{"."},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			entry := registry.Entry{
+				Name:   tc.name,
+				URL:    "http://example.com/fw.yaml",
+				SHA256: "abc",
+			}
+			_, err := registry.InstallFramework(entry)
+			if err == nil {
+				t.Errorf("expected error for malicious name %q", tc.name)
+			}
+		})
+	}
+}
+
+func TestInstallFramework_rejectsHTTP(t *testing.T) {
+	registry.SetAllowInsecureHTTP(false)
+	defer registry.SetAllowInsecureHTTP(true)
+
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	entry := registry.Entry{
+		Name:   "evil",
+		URL:    "http://example.com/evil.yaml",
+		SHA256: "abc",
+	}
+	_, err := registry.InstallFramework(entry)
+	if err == nil {
+		t.Fatal("expected error for non-HTTPS download URL")
 	}
 }
