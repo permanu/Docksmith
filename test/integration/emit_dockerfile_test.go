@@ -210,8 +210,8 @@ func TestEmitDockerfile_StepRun_CacheMount(t *testing.T) {
 
 func TestEmitDockerfile_StepRun_SecretMount(t *testing.T) {
 	plan := singleStepPlan(docksmith.Step{
-		Type:        docksmith.StepRun,
-		Args:        []string{"pip install -r requirements.txt"},
+		Type:         docksmith.StepRun,
+		Args:         []string{"pip install -r requirements.txt"},
 		SecretMounts: []docksmith.SecretMount{{ID: "pip-conf", Target: "/root/.pip/pip.conf"}},
 	})
 	out := docksmith.EmitDockerfile(plan)

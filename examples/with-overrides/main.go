@@ -30,13 +30,13 @@ func main() {
 	// Override the generated Dockerfile with custom settings.
 	// These take precedence over auto-detected values.
 	dockerfile, err := docksmith.GenerateDockerfile(fw,
-		docksmith.WithExpose(9090),                           // custom port
-		docksmith.WithBuildCommand("npm run build:prod"),      // custom build step
-		docksmith.WithStartCommand("node dist/server.js"),     // custom start command
+		docksmith.WithExpose(9090),                        // custom port
+		docksmith.WithBuildCommand("npm run build:prod"),  // custom build step
+		docksmith.WithStartCommand("node dist/server.js"), // custom start command
 		docksmith.WithHealthcheck("curl -f http://localhost:9090/healthz || exit 1"),
-		docksmith.WithUser("appuser"),                         // run as non-root user
+		docksmith.WithUser("appuser"), // run as non-root user
 		docksmith.WithExtraEnv(map[string]string{
-			"NODE_ENV": "production",
+			"NODE_ENV":  "production",
 			"LOG_LEVEL": "info",
 		}),
 	)

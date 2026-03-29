@@ -135,11 +135,8 @@ func InstallFramework(entry Entry) (string, error) {
 		return "", fmt.Errorf("install %s: %w", safeName, err)
 	}
 
-	writeAtomic(dest, data)
-
-	// Verify the write actually landed.
-	if _, err := os.Stat(dest); err != nil {
-		return "", fmt.Errorf("install %s: write failed: %w", safeName, err)
+	if err := writeAtomicStrict(dest, data); err != nil {
+		return "", fmt.Errorf("install %s: write: %w", safeName, err)
 	}
 	return dest, nil
 }

@@ -15,17 +15,17 @@ import (
 
 // Config represents a user-provided docksmith.toml/yaml/json configuration.
 type Config struct {
-	Runtime        string            `toml:"runtime"          yaml:"runtime"          json:"runtime"`
-	Version        string            `toml:"version"          yaml:"version"          json:"version,omitempty"`
-	PackageManager string            `toml:"package_manager"  yaml:"package_manager"  json:"package_manager,omitempty"`
-	Dockerfile     string            `toml:"dockerfile"       yaml:"dockerfile"       json:"dockerfile,omitempty"`
-	ContextRoot    string            `toml:"context_root"     yaml:"context_root"     json:"context_root,omitempty"`
-	Env            map[string]string `toml:"env"              yaml:"env"              json:"env,omitempty"`
-	Build          BuildConfig       `toml:"build"            yaml:"build"            json:"build,omitempty"`
-	Start          StartConfig       `toml:"start"            yaml:"start"            json:"start,omitempty"`
-	Install        InstallConfig            `toml:"install"          yaml:"install"          json:"install,omitempty"`
-	RuntimeConfig  RuntimeCfg               `toml:"runtime_config"   yaml:"runtime_config"   json:"runtime_config,omitempty"`
-	Secrets        map[string]SecretConfig   `toml:"secrets"          yaml:"secrets"          json:"secrets,omitempty"`
+	Runtime        string                  `toml:"runtime"          yaml:"runtime"          json:"runtime"`
+	Version        string                  `toml:"version"          yaml:"version"          json:"version,omitempty"`
+	PackageManager string                  `toml:"package_manager"  yaml:"package_manager"  json:"package_manager,omitempty"`
+	Dockerfile     string                  `toml:"dockerfile"       yaml:"dockerfile"       json:"dockerfile,omitempty"`
+	ContextRoot    string                  `toml:"context_root"     yaml:"context_root"     json:"context_root,omitempty"`
+	Env            map[string]string       `toml:"env"              yaml:"env"              json:"env,omitempty"`
+	Build          BuildConfig             `toml:"build"            yaml:"build"            json:"build,omitempty"`
+	Start          StartConfig             `toml:"start"            yaml:"start"            json:"start,omitempty"`
+	Install        InstallConfig           `toml:"install"          yaml:"install"          json:"install,omitempty"`
+	RuntimeConfig  RuntimeCfg              `toml:"runtime_config"   yaml:"runtime_config"   json:"runtime_config,omitempty"`
+	Secrets        map[string]SecretConfig `toml:"secrets"          yaml:"secrets"          json:"secrets,omitempty"`
 }
 
 // BuildConfig groups build-time overrides.
@@ -169,17 +169,17 @@ func LoadWithNames(dir string, names []string) (*Config, error) {
 }
 
 type rawConfig struct {
-	Runtime        string            `toml:"runtime"         yaml:"runtime"         json:"runtime"`
-	Version        string            `toml:"version"         yaml:"version"         json:"version,omitempty"`
-	PackageManager string            `toml:"package_manager" yaml:"package_manager" json:"package_manager,omitempty"`
-	Dockerfile     string            `toml:"dockerfile"      yaml:"dockerfile"      json:"dockerfile,omitempty"`
-	ContextRoot    string            `toml:"context_root"    yaml:"context_root"    json:"context_root,omitempty"`
-	Env            map[string]string `toml:"env"             yaml:"env"             json:"env,omitempty"`
-	Build          BuildConfig       `toml:"build"           yaml:"build"           json:"build,omitempty"`
-	Start          StartConfig       `toml:"start"           yaml:"start"           json:"start,omitempty"`
-	Install        InstallConfig            `toml:"install"         yaml:"install"         json:"install,omitempty"`
-	RuntimeConfig  rawRuntimeCfg            `toml:"runtime_config"  yaml:"runtime_config"  json:"runtime_config,omitempty"`
-	Secrets        map[string]SecretConfig   `toml:"secrets"         yaml:"secrets"         json:"secrets,omitempty"`
+	Runtime        string                  `toml:"runtime"         yaml:"runtime"         json:"runtime"`
+	Version        string                  `toml:"version"         yaml:"version"         json:"version,omitempty"`
+	PackageManager string                  `toml:"package_manager" yaml:"package_manager" json:"package_manager,omitempty"`
+	Dockerfile     string                  `toml:"dockerfile"      yaml:"dockerfile"      json:"dockerfile,omitempty"`
+	ContextRoot    string                  `toml:"context_root"    yaml:"context_root"    json:"context_root,omitempty"`
+	Env            map[string]string       `toml:"env"             yaml:"env"             json:"env,omitempty"`
+	Build          BuildConfig             `toml:"build"           yaml:"build"           json:"build,omitempty"`
+	Start          StartConfig             `toml:"start"           yaml:"start"           json:"start,omitempty"`
+	Install        InstallConfig           `toml:"install"         yaml:"install"         json:"install,omitempty"`
+	RuntimeConfig  rawRuntimeCfg           `toml:"runtime_config"  yaml:"runtime_config"  json:"runtime_config,omitempty"`
+	Secrets        map[string]SecretConfig `toml:"secrets"         yaml:"secrets"         json:"secrets,omitempty"`
 }
 
 // ParseConfig parses raw config data based on the file extension in name.

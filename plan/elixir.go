@@ -36,8 +36,8 @@ func planElixir(fw *core.Framework) (*core.BuildPlan, error) {
 			{Type: core.StepRun, Args: []string{"mix local.hex --force && mix local.rebar --force"}},
 			{Type: core.StepCopy, Args: []string{"mix.exs", "mix.lock", "./"}},
 			{
-				Type: core.StepRun,
-				Args: []string{"mix deps.get --only prod && mix deps.compile"},
+				Type:       core.StepRun,
+				Args:       []string{"mix deps.get --only prod && mix deps.compile"},
 				CacheMount: &core.CacheMount{Target: "/root/.mix"},
 			},
 			{Type: core.StepCopy, Args: []string{".", "."}},

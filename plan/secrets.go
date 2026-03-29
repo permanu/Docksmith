@@ -39,7 +39,7 @@ func ApplySecretMounts(plan *core.BuildPlan, dir string) []detect.SecretDef {
 		if err := validateSecretTarget(s.Target); err != nil {
 			continue
 		}
-		attachSecretToInstallStep(plan, &core.SecretMount{ID: s.ID, Target: s.Target})
+		attachSecretToInstallStep(plan, core.SecretMount{ID: s.ID, Target: s.Target})
 	}
 	return secrets
 }
@@ -47,7 +47,7 @@ func ApplySecretMounts(plan *core.BuildPlan, dir string) []detect.SecretDef {
 // attachSecretToInstallStep finds the first RUN step that looks like a
 // dependency install command and attaches the secret mount to it.
 // Searches the first stage (deps/builder) which is where install runs.
-func attachSecretToInstallStep(plan *core.BuildPlan, mount *core.SecretMount) {
+func attachSecretToInstallStep(plan *core.BuildPlan, mount core.SecretMount) {
 	first := &plan.Stages[0]
 	for i := range first.Steps {
 		step := &first.Steps[i]
@@ -55,7 +55,7 @@ func attachSecretToInstallStep(plan *core.BuildPlan, mount *core.SecretMount) {
 			continue
 		}
 		if looksLikeInstall(strings.Join(step.Args, " ")) {
-			step.SecretMount = mount
+			step.SecretMounts = append(step.SecretMounts, mount)
 			return
 		}
 	}

@@ -1,8 +1,8 @@
 package plan
 
 import (
-	"github.com/permanu/docksmith/detect"
 	"github.com/permanu/docksmith/core"
+	"github.com/permanu/docksmith/detect"
 	"strings"
 	"testing"
 )

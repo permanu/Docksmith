@@ -158,7 +158,10 @@ func TestEvalRuleDependencyPackageJSON(t *testing.T) {
 	dir := makeDetectFixture(t, map[string]string{
 		"package.json": `{"dependencies":{"next":"13.0.0"},"devDependencies":{"eslint":"8.0.0"}}`,
 	})
-	tests := []struct{ dep string; want bool }{
+	tests := []struct {
+		dep  string
+		want bool
+	}{
 		{"next", true}, {"eslint", true}, {"react", false},
 	}
 	for _, tt := range tests {
@@ -174,7 +177,10 @@ func TestEvalRuleDependencyRequirementsTxt(t *testing.T) {
 	dir := makeDetectFixture(t, map[string]string{
 		"requirements.txt": "Django>=3.2\nflask==2.0.0\n# comment\nrequests\n",
 	})
-	tests := []struct{ dep string; want bool }{
+	tests := []struct {
+		dep  string
+		want bool
+	}{
 		{"Django", true}, {"django", true}, {"flask", true}, {"requests", true}, {"numpy", false},
 	}
 	for _, tt := range tests {
@@ -202,7 +208,10 @@ func TestEvalRuleDependencyGemfile(t *testing.T) {
 	dir := makeDetectFixture(t, map[string]string{
 		"Gemfile": "source 'https://rubygems.org'\ngem 'rails', '~> 7.0'\ngem \"devise\"\n",
 	})
-	tests := []struct{ dep string; want bool }{
+	tests := []struct {
+		dep  string
+		want bool
+	}{
 		{"rails", true}, {"devise", true}, {"sinatra", false},
 	}
 	for _, tt := range tests {
@@ -217,7 +226,10 @@ func TestEvalRuleDependencyComposerJSON(t *testing.T) {
 	dir := makeDetectFixture(t, map[string]string{
 		"composer.json": `{"require":{"laravel/framework":"^10.0"},"require-dev":{"phpunit/phpunit":"^10"}}`,
 	})
-	tests := []struct{ dep string; want bool }{
+	tests := []struct {
+		dep  string
+		want bool
+	}{
 		{"laravel/framework", true}, {"phpunit/phpunit", true}, {"symfony/console", false},
 	}
 	for _, tt := range tests {
@@ -232,7 +244,10 @@ func TestEvalRuleDependencyCargoToml(t *testing.T) {
 	dir := makeDetectFixture(t, map[string]string{
 		"Cargo.toml": "[package]\nname = \"myapp\"\n\n[dependencies]\naxum = \"0.7\"\n\n[dev-dependencies]\ntokio = \"1\"\n",
 	})
-	tests := []struct{ dep string; want bool }{
+	tests := []struct {
+		dep  string
+		want bool
+	}{
 		{"axum", true}, {"tokio", true}, {"serde", false},
 	}
 	for _, tt := range tests {
@@ -247,7 +262,10 @@ func TestEvalRuleDependencyMixExs(t *testing.T) {
 	dir := makeDetectFixture(t, map[string]string{
 		"mix.exs": "defmodule App.MixProject do\n  defp deps do\n    [{:phoenix, \"~> 1.7\"}, {:ecto, \"~> 3.10\"}]\n  end\nend\n",
 	})
-	tests := []struct{ dep string; want bool }{
+	tests := []struct {
+		dep  string
+		want bool
+	}{
 		{"phoenix", true}, {"ecto", true}, {"plug", false},
 	}
 	for _, tt := range tests {
@@ -264,7 +282,10 @@ func TestEvalRuleJSONPath(t *testing.T) {
 	dir := makeDetectFixture(t, map[string]string{
 		"package.json": `{"scripts":{"build":"next build"},"engines":{"node":"18"}}`,
 	})
-	tests := []struct{ path string; want bool }{
+	tests := []struct {
+		path string
+		want bool
+	}{
 		{"scripts.build", true}, {"engines.node", true}, {"engines.missing", false}, {"nonexistent.key", false},
 	}
 	for _, tt := range tests {

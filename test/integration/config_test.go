@@ -274,7 +274,7 @@ func TestConfig_ToFramework_GoDefaultBuildCommand(t *testing.T) {
 func TestConfig_ToFramework_GoCustomBuildCommand_NotOverridden(t *testing.T) {
 	cfg := &docksmith.Config{
 		Runtime: "go", Build: docksmith.BuildConfig{Command: "make build"},
-		Start: docksmith.StartConfig{Command: "go run ."},
+		Start:         docksmith.StartConfig{Command: "go run ."},
 		RuntimeConfig: docksmith.RuntimeCfg{Expose: 8080},
 	}
 	fw := docksmith.ConfigToFramework(cfg)

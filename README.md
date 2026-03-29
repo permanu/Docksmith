@@ -9,7 +9,7 @@ runtimes: 12
 detectors: 45
 architecture: detect-plan-emit
 output: dockerfile
-status: internal-testing
+status: pre-release
 -->
 
 # Docksmith
@@ -30,7 +30,7 @@ Go library and CLI that detects your framework and generates a hardened, multi-s
 | **Output** | Plain Dockerfile (committable, no lock-in) |
 | **API docs** | [pkg.go.dev/github.com/permanu/docksmith](https://pkg.go.dev/github.com/permanu/docksmith) |
 | **License** | Apache 2.0 |
-| **Status** | Internal use at Permanu; not tested at external production scale |
+| **Status** | Pre-release; internal use at Permanu |
 
 ```
 $ docksmith detect .
@@ -110,7 +110,7 @@ docksmith dockerfile . > Dockerfile  # generate it
 docker build -t myapp .             # build normally
 ```
 
-Other commands: `plan` (inspect the build plan), `eject` (write Dockerfile + .dockerignore to disk), `init` (generate a docksmith.toml pre-filled from detection), `build` (detect + generate + docker build in one shot).
+Other commands: `plan` (inspect the build plan), `eject` (write Dockerfile + .dockerignore to disk), `init` (generate a docksmith.toml pre-filled from detection), `build` (detect + generate + docker build in one shot), `registry search` (find community framework definitions), `registry install` (install a YAML definition from the registry).
 
 ## How it works
 
@@ -149,8 +149,8 @@ Every generated Dockerfile gets these by default:
 | **Health checks** | Auto-injected per runtime | No | No | No |
 | **Tini init** | Node, Python | No | No | No |
 | **Distroless** | Go, Rust | No | No | No |
-| **Monorepo support** | Manual (point at app dir) | Yes (workspace detection) | Limited | Varies |
-| **Buildtime secrets** | No | Yes (BuildKit secrets) | No | Varies |
+| **Monorepo support** | Yes (`--root` flag separates context from app dir) | Yes (workspace detection) | Limited | Varies |
+| **Buildtime secrets** | Yes (BuildKit `--mount=type=secret`) | Yes (BuildKit secrets) | No | Varies |
 | **Runtime mgmt** | Alpine apk | Mise | Nix | Buildpack-provided |
 | **Custom frameworks** | YAML definitions + Go API | Provider plugins (Go) | Nix expressions | Buildpacks (complex) |
 | **Status** | Internal testing at Permanu | Powers all Railway deployments | Maintenance mode | Mature, wide adoption |
@@ -159,14 +159,14 @@ Every generated Dockerfile gets these by default:
 ### Comparison notes
 
 **Railpack** — Railway's successor to Nixpacks (January 2025). Builds OCI images directly via BuildKit LLB using Mise for runtime management. Supports monorepos, BuildKit secrets, and SPA frameworks. Railway reports 38% smaller Node and 77% smaller Python images vs Nixpacks.
-- *Stronger than Docksmith*: monorepo support, proven at Railway's scale, smaller images (graph-based parallel BuildKit execution), SPA-specific optimizations (asset hashing, CDN headers, fallback routing)
-- *Docksmith differs*: readable/committable Dockerfile output, embeddable Go library, hardening defaults (tini, distroless, health checks)
+- *Stronger than Docksmith*: proven at Railway's scale, smaller images (graph-based parallel BuildKit execution), SPA-specific optimizations (asset hashing, CDN headers, fallback routing)
+- *Docksmith differs*: readable/committable Dockerfile output, embeddable Go library, hardening defaults (tini, distroless, health checks), community YAML framework registry
 
 **Nixpacks** — Maintenance mode. Railway recommends Railpack. Widest language coverage (23 providers including Crystal, Haskell, Dart, Zig, and others docksmith does not support).
 
 **Cloud Native Buildpacks / Paketo** — Most mature option. CNCF project. Used by Heroku, Google Cloud, and Spring Boot. Tradeoff: opaque OCI layers — you cannot inspect or modify the generated layers the way you can with a Dockerfile.
 
-**Docksmith** — Choose when you want readable Dockerfiles, a Go library to embed in your own platform, or hardening defaults without manual work. Does not build images itself — generates Dockerfiles and hands off to Docker/BuildKit. Not yet tested at production scale outside Permanu.
+**Docksmith** — Choose when you want readable Dockerfiles, a Go library to embed in your own platform, or hardening defaults without manual work. Supports monorepos (`--root`), BuildKit secret mounts for private registries, and a community YAML framework registry. Does not build images itself — generates Dockerfiles and hands off to Docker/BuildKit.
 
 ## Supported frameworks
 
@@ -214,7 +214,7 @@ dockerfile, fw, err := docksmith.Build("./my-project",
 )
 ```
 
-Available options: `WithUser`, `WithHealthcheck`, `WithHealthcheckDisabled`, `WithRuntimeImage`, `WithBaseImage`, `WithEntrypoint`, `WithExtraEnv`, `WithExpose`, `WithInstallCommand`, `WithBuildCommand`, `WithStartCommand`, `WithSystemDeps`, `WithBuildCacheDisabled`.
+Available options: `WithUser`, `WithHealthcheck`, `WithHealthcheckDisabled`, `WithRuntimeImage`, `WithBaseImage`, `WithEntrypoint`, `WithExtraEnv`, `WithExpose`, `WithInstallCommand`, `WithBuildCommand`, `WithStartCommand`, `WithSystemDeps`, `WithBuildCacheDisabled`, `WithSecrets`, `WithContextRoot`.
 
 Each subpackage (`detect`, `plan`, `emit`, `config`, `yamldef`) is independently importable:
 
@@ -262,6 +262,23 @@ expose = 3000
 [env]
 NODE_ENV = "production"
 ```
+
+Monorepo support -- separate build context from app directory:
+
+```toml
+context_root = "."  # repo root as Docker build context
+# run: docksmith dockerfile --root . ./apps/frontend
+```
+
+Buildtime secrets for private registries and API keys:
+
+```toml
+[secrets]
+npm = { target = "/root/.npmrc" }
+license_key = { env = "LICENSE_KEY" }
+```
+
+When private registry files (`.npmrc`, `pip.conf`, `.netrc`, `settings.xml`) are detected, docksmith auto-generates BuildKit `--mount=type=secret` instructions and excludes those files from `.dockerignore`.
 
 Also reads `docksmith.yaml` and `docksmith.json`. Run `docksmith init` to generate a config pre-filled from detection.
 
@@ -316,18 +333,6 @@ tests:
 ```
 
 YAML definitions include inline tests. Run them with `docksmith test my-framework.yaml`. The community registry (`docksmith registry search`) provides additional definitions.
-
-## Limitations
-
-Things docksmith does not do, or does not do well yet:
-
-- **Monorepos.** Docksmith operates on a single directory. You can point it at a subdirectory (`docksmith detect ./apps/frontend`) and it will detect and generate a Dockerfile for that app. However, the generated `COPY . .` uses that directory as the Docker build context — shared packages or configs above the app directory are not included. There is no separate root-dir vs app-dir concept, no workspace root detection, and no multi-app orchestration.
-- **Private registries.** No built-in support for authenticating to private npm/PyPI/Go module registries during builds. You can work around this with BuildKit secrets, but docksmith does not generate those steps.
-- **Buildtime secrets.** No secret injection. If your build needs API keys or tokens, you need to add those steps manually.
-- **Runtime configuration.** Docksmith generates a Dockerfile. It does not handle runtime concerns like environment variables, volumes, networking, or orchestration.
-- **Image building.** The `build` command shells out to `docker build`. There is no native BuildKit client. If Docker is not installed, `build` fails.
-- **Windows containers.** Linux only. No Windows container support.
-- **Not tested at scale.** Docksmith is used internally at Permanu and has been tested via E2E on VPS deployments. It has not served production traffic at scale.
 
 ## Development
 

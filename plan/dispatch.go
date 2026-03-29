@@ -77,79 +77,24 @@ func applyPlanOverrides(plan *core.BuildPlan, cfg *planConfig) {
 	isSingleStage := len(plan.Stages) == 1
 
 	if isSingleStage {
-		// For single-stage plans, first and last alias the same stage.
-		// Apply all overrides to the single stage in a sensible order:
-		// base image first, then system deps, then install, then start command.
-
-		// --- Base image override (BaseImage takes priority, RuntimeImage as fallback) ---
 		if cfg.BaseImage != nil {
 			first.From = *cfg.BaseImage
 		} else if cfg.RuntimeImage != nil {
 			first.From = *cfg.RuntimeImage
 		}
-
-		// --- System dependencies ---
-		if len(cfg.SystemDeps) > 0 {
-			depList := strings.Join(cfg.SystemDeps, " ")
-			var installCmd string
-			if strings.Contains(first.From, "alpine") {
-				installCmd = "apk add --no-cache " + depList
-			} else {
-				installCmd = "apt-get update -qq && apt-get install -y --no-install-recommends " + depList + " && rm -rf /var/lib/apt/lists/*"
-			}
-			sysStep := core.Step{Type: core.StepRun, Args: []string{installCmd}}
-			insertIdx := 0
-			for i, s := range first.Steps {
-				if s.Type == core.StepWorkdir {
-					insertIdx = i + 1
-				} else {
-					break
-				}
-			}
-			first.Steps = append(first.Steps[:insertIdx], append([]core.Step{sysStep}, first.Steps[insertIdx:]...)...)
-		}
-
-		// --- Install command override ---
-		if cfg.InstallCmd != nil {
-			replaceLastRun(first, *cfg.InstallCmd)
-		}
 	} else {
-		// Multi-stage: first is the builder, last is runtime.
-
-		// --- Base image override: replace the first stage's FROM ---
 		if cfg.BaseImage != nil {
 			first.From = *cfg.BaseImage
 		}
-
 		if cfg.RuntimeImage != nil {
 			last.From = *cfg.RuntimeImage
 		}
+	}
 
-		// --- System dependencies: prepend install step to the first stage ---
-		if len(cfg.SystemDeps) > 0 {
-			depList := strings.Join(cfg.SystemDeps, " ")
-			var installCmd string
-			if strings.Contains(first.From, "alpine") {
-				installCmd = "apk add --no-cache " + depList
-			} else {
-				installCmd = "apt-get update -qq && apt-get install -y --no-install-recommends " + depList + " && rm -rf /var/lib/apt/lists/*"
-			}
-			sysStep := core.Step{Type: core.StepRun, Args: []string{installCmd}}
-			insertIdx := 0
-			for i, s := range first.Steps {
-				if s.Type == core.StepWorkdir {
-					insertIdx = i + 1
-				} else {
-					break
-				}
-			}
-			first.Steps = append(first.Steps[:insertIdx], append([]core.Step{sysStep}, first.Steps[insertIdx:]...)...)
-		}
+	insertSystemDepsStep(first, cfg.SystemDeps)
 
-		// --- Install command override: replace the last RUN step in the first stage ---
-		if cfg.InstallCmd != nil {
-			replaceLastRun(first, *cfg.InstallCmd)
-		}
+	if cfg.InstallCmd != nil {
+		replaceLastRun(first, *cfg.InstallCmd)
 	}
 
 	// --- Build command override: replace the last RUN step in the build stage ---
@@ -257,6 +202,32 @@ func mergeSecrets(existing, incoming []core.SecretMount) []core.SecretMount {
 	return merged
 }
 
+// insertSystemDepsStep prepends a system package install step to the stage.
+// Deps are sanitized to reject shell metacharacters.
+func insertSystemDepsStep(stage *core.Stage, deps []string) {
+	safe := sanitizeSysDeps(deps)
+	if len(safe) == 0 {
+		return
+	}
+	depList := strings.Join(safe, " ")
+	var cmd string
+	if strings.Contains(stage.From, "alpine") {
+		cmd = "apk add --no-cache " + depList
+	} else {
+		cmd = "apt-get update -qq && apt-get install -y --no-install-recommends " + depList + " && rm -rf /var/lib/apt/lists/*"
+	}
+	sysStep := core.Step{Type: core.StepRun, Args: []string{cmd}}
+	insertIdx := 0
+	for i, s := range stage.Steps {
+		if s.Type == core.StepWorkdir {
+			insertIdx = i + 1
+		} else {
+			break
+		}
+	}
+	stage.Steps = append(stage.Steps[:insertIdx], append([]core.Step{sysStep}, stage.Steps[insertIdx:]...)...)
+}
+
 // findStageByName returns a pointer to the named stage, or nil.
 func findStageByName(plan *core.BuildPlan, name string) *core.Stage {
 	for i := range plan.Stages {
@@ -299,4 +270,3 @@ func replaceOrAddExpose(stage *core.Stage, port int) {
 	}
 	stage.Steps = append(stage.Steps, core.Step{Type: core.StepExpose, Args: []string{portStr}})
 }
-

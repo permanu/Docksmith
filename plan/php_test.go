@@ -18,10 +18,10 @@ func laravelFramework() *core.Framework {
 
 func wordpressFramework() *core.Framework {
 	return &core.Framework{
-		Name:       "wordpress",
+		Name:         "wordpress",
 		StartCommand: "apache2-foreground",
-		Port:       80,
-		PHPVersion: "8.3",
+		Port:         80,
+		PHPVersion:   "8.3",
 	}
 }
 

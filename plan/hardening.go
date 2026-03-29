@@ -1,8 +1,8 @@
 package plan
 
 import (
-	"github.com/permanu/docksmith/core"
 	"fmt"
+	"github.com/permanu/docksmith/core"
 	"strings"
 )
 

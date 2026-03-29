@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/permanu/docksmith/config"
 	"github.com/permanu/docksmith/core"
@@ -65,7 +66,10 @@ type DetectOptions struct {
 
 // detectors is the ordered registry. Individual runtime detectors
 // append to this at init time. Dockerfile and static fallback are handled inline.
-var detectors []NamedDetector
+var (
+	detectorsMu sync.RWMutex
+	detectors   []NamedDetector
+)
 
 // Detect analyzes dir and returns the detected framework.
 // Returns a static-site framework as fallback if nothing matches.
@@ -91,7 +95,12 @@ func DetectWithOptions(dir string, opts DetectOptions) (*core.Framework, error) 
 		return &core.Framework{Name: "dockerfile", Port: 8080}, nil
 	}
 
-	for _, nd := range detectors {
+	detectorsMu.RLock()
+	snapshot := make([]NamedDetector, len(detectors))
+	copy(snapshot, detectors)
+	detectorsMu.RUnlock()
+
+	for _, nd := range snapshot {
 		if fw := nd.Detect(dir); fw != nil {
 			return fw, nil
 		}
@@ -141,12 +150,16 @@ func loadConfigFramework(dir string, opts DetectOptions) (*core.Framework, error
 // RegisterDetector prepends d to the registry, giving it the highest priority
 // among registered detectors.
 func RegisterDetector(name string, d core.DetectorFunc) {
+	detectorsMu.Lock()
 	detectors = append([]NamedDetector{{name, d}}, detectors...)
+	detectorsMu.Unlock()
 }
 
 // RegisterDetectorBefore inserts d immediately before the named detector.
 // If before is not found, d is prepended.
 func RegisterDetectorBefore(before, name string, d core.DetectorFunc) {
+	detectorsMu.Lock()
+	defer detectorsMu.Unlock()
 	for i, nd := range detectors {
 		if nd.Name == before {
 			updated := make([]NamedDetector, 0, len(detectors)+1)
@@ -157,7 +170,7 @@ func RegisterDetectorBefore(before, name string, d core.DetectorFunc) {
 			return
 		}
 	}
-	RegisterDetector(name, d)
+	detectors = append([]NamedDetector{{name, d}}, detectors...)
 }
 
 // ConfigToFramework converts a Config to a Framework for Dockerfile generation.

@@ -1,8 +1,8 @@
 package plan
 
 import (
-	"github.com/permanu/docksmith/core"
 	"errors"
+	"github.com/permanu/docksmith/core"
 	"testing"
 )
 

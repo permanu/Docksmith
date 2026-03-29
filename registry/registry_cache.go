@@ -90,6 +90,30 @@ func writeAtomic(path string, data []byte) {
 	}
 }
 
+// writeAtomicStrict is like writeAtomic but returns errors instead of swallowing them.
+// Used for authoritative writes (e.g. framework install) where failure must be reported.
+func writeAtomicStrict(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	return nil
+}
+
 func UserFrameworksDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {

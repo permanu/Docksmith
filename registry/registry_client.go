@@ -13,7 +13,7 @@ import (
 const maxHTTPResponseBytes = 10 << 20 // 10 MB
 
 var httpClient = &http.Client{
-	Timeout: 30 * time.Second,
+	Timeout:   30 * time.Second,
 	Transport: &ssrfTransport{base: http.DefaultTransport},
 }
 

@@ -143,9 +143,9 @@ func TestDetectDenoPlain(t *testing.T) {
 
 func TestDetectDenoVersion(t *testing.T) {
 	tests := []struct {
-		name    string
-		files   map[string]string
-		want    string
+		name  string
+		files map[string]string
+		want  string
 	}{
 		{
 			"version from deno.json",

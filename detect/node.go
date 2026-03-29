@@ -1,8 +1,8 @@
 package detect
 
 import (
-	"github.com/permanu/docksmith/core"
 	"encoding/json"
+	"github.com/permanu/docksmith/core"
 	"os"
 	"path/filepath"
 )

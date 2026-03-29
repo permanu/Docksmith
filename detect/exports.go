@@ -21,7 +21,17 @@ func ExtractMajorVersion(constraint string) string { return extractMajorVersion(
 func ContainedPath(base, rel string) (string, error) { return containedPath(base, rel) }
 
 // GetDetectors returns the current detector registry. For testing only.
-func GetDetectors() []NamedDetector { return detectors }
+func GetDetectors() []NamedDetector {
+	detectorsMu.RLock()
+	defer detectorsMu.RUnlock()
+	out := make([]NamedDetector, len(detectors))
+	copy(out, detectors)
+	return out
+}
 
 // SetDetectors replaces the detector registry. For testing only.
-func SetDetectors(d []NamedDetector) { detectors = d }
+func SetDetectors(d []NamedDetector) {
+	detectorsMu.Lock()
+	detectors = d
+	detectorsMu.Unlock()
+}

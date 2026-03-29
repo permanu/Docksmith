@@ -180,10 +180,10 @@ func TestPlanPython_BuilderHasBuildEssential(t *testing.T) {
 
 func TestPlanPython_PackageManagers(t *testing.T) {
 	cases := []struct {
-		pm             string
-		wantInstall    string
-		wantCache      string
-		wantCopyFile   string
+		pm           string
+		wantInstall  string
+		wantCache    string
+		wantCopyFile string
 	}{
 		{
 			pm:           "pip",

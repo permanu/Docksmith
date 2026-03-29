@@ -1,8 +1,8 @@
 package detect
 
 import (
-	"github.com/permanu/docksmith/core"
 	"fmt"
+	"github.com/permanu/docksmith/core"
 	"os"
 	"path/filepath"
 	"regexp"

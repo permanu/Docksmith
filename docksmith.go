@@ -114,8 +114,8 @@ var (
 	WithStartCommand        = plan.WithStartCommand
 	WithSystemDeps          = plan.WithSystemDeps
 	WithBuildCacheDisabled  = plan.WithBuildCacheDisabled
-	WithSecrets            = plan.WithSecrets
-	WithContextRoot        = plan.WithContextRoot
+	WithSecrets             = plan.WithSecrets
+	WithContextRoot         = plan.WithContextRoot
 )
 
 var ResolveDockerTag = plan.ResolveDockerTag

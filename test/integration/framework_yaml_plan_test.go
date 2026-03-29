@@ -11,9 +11,9 @@ import (
 
 func minimalNodeDef() *docksmith.FrameworkDef {
 	return &docksmith.FrameworkDef{
-		Name:    "express",
-		Runtime: "node",
-		Version: docksmith.VersionConfig{Default: "22"},
+		Name:           "express",
+		Runtime:        "node",
+		Version:        docksmith.VersionConfig{Default: "22"},
 		PackageManager: docksmith.PMConfig{Default: "npm"},
 		Plan: docksmith.PlanDef{
 			Port: 3000,

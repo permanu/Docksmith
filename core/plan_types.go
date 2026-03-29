@@ -9,7 +9,7 @@ import (
 type StepType int
 
 const (
-	StepWorkdir     StepType = iota + 1
+	StepWorkdir StepType = iota + 1
 	StepCopy
 	StepCopyFrom
 	StepRun
