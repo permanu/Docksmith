@@ -49,6 +49,7 @@ type BuildConfig = config.BuildConfig
 type StartConfig = config.StartConfig
 type InstallConfig = config.InstallConfig
 type RuntimeCfg = config.RuntimeCfg
+type SecretConfig = config.SecretConfig
 
 // Detect types
 type NamedDetector = detect.NamedDetector
@@ -112,6 +113,7 @@ var (
 	WithStartCommand        = plan.WithStartCommand
 	WithSystemDeps          = plan.WithSystemDeps
 	WithBuildCacheDisabled  = plan.WithBuildCacheDisabled
+	WithSecrets            = plan.WithSecrets
 )
 
 var ResolveDockerTag = plan.ResolveDockerTag
@@ -289,5 +291,21 @@ func ConfigToPlanOptions(c *Config) ([]PlanOption, error) {
 		}
 	}
 
+	if len(c.Secrets) > 0 {
+		opts = append(opts, WithSecrets(configSecretsToMounts(c.Secrets)))
+	}
+
 	return opts, nil
+}
+
+func configSecretsToMounts(secrets map[string]SecretConfig) []core.SecretMount {
+	mounts := make([]core.SecretMount, 0, len(secrets))
+	for id, sec := range secrets {
+		mounts = append(mounts, core.SecretMount{
+			ID:     id,
+			Target: sec.Target,
+			Env:    sec.Env,
+		})
+	}
+	return mounts
 }

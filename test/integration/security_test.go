@@ -125,7 +125,7 @@ func TestEmitDockerfile_injectionInFields(t *testing.T) {
 				{Type: docksmith.StepEnv, Args: []string{poison, poison}},
 				{Type: docksmith.StepCopy, Args: []string{poison, poison}},
 				{Type: docksmith.StepRun, Args: []string{poison}, CacheMount: &docksmith.CacheMount{Target: poison}},
-				{Type: docksmith.StepRun, Args: []string{poison}, SecretMount: &docksmith.SecretMount{ID: poison, Target: poison}},
+				{Type: docksmith.StepRun, Args: []string{poison}, SecretMounts: []docksmith.SecretMount{{ID: poison, Target: poison}}},
 				{Type: docksmith.StepCmd, Args: []string{poison}},
 				{Type: docksmith.StepExpose, Args: []string{"3000"}},
 				{Type: docksmith.StepCopyFrom, CopyFrom: &docksmith.CopyFrom{Stage: "build", Src: poison, Dst: poison}},

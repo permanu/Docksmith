@@ -124,10 +124,8 @@ func writeRun(b *strings.Builder, step core.Step) {
 		mounts = append(mounts, fmt.Sprintf("--mount=type=cache,target=%s",
 			SanitizeDockerfileArg(step.CacheMount.Target)))
 	}
-	if step.SecretMount != nil {
-		mounts = append(mounts, fmt.Sprintf("--mount=type=secret,id=%s,target=%s",
-			SanitizeDockerfileArg(step.SecretMount.ID),
-			SanitizeDockerfileArg(step.SecretMount.Target)))
+	for _, sm := range step.SecretMounts {
+		mounts = append(mounts, formatSecretMount(sm))
 	}
 
 	cmd := SanitizeDockerfileArg(strings.Join(step.Args, " "))
@@ -136,6 +134,14 @@ func writeRun(b *strings.Builder, step core.Step) {
 	} else {
 		fmt.Fprintf(b, "RUN %s\n", cmd)
 	}
+}
+
+func formatSecretMount(sm core.SecretMount) string {
+	id := SanitizeDockerfileArg(sm.ID)
+	if sm.Target != "" {
+		return fmt.Sprintf("--mount=type=secret,id=%s,target=%s", id, SanitizeDockerfileArg(sm.Target))
+	}
+	return fmt.Sprintf("--mount=type=secret,id=%s,env=%s", id, SanitizeDockerfileArg(sm.Env))
 }
 
 // planHasExpose returns true if any stage step already emits an EXPOSE instruction.

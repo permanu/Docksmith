@@ -128,9 +128,11 @@ func TestValidate_SecretMount_Valid(t *testing.T) {
 					{
 						Type: core.StepRun,
 						Args: []string{"pip install -r requirements.txt"},
-						SecretMount: &core.SecretMount{
-							ID:     "pip-conf",
-							Target: "/root/.pip/pip.conf",
+						SecretMounts: []core.SecretMount{
+							{
+								ID:     "pip-conf",
+								Target: "/root/.pip/pip.conf",
+							},
 						},
 					},
 				},

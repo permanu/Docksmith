@@ -22,8 +22,9 @@ type Config struct {
 	Env            map[string]string `toml:"env"              yaml:"env"              json:"env,omitempty"`
 	Build          BuildConfig       `toml:"build"            yaml:"build"            json:"build,omitempty"`
 	Start          StartConfig       `toml:"start"            yaml:"start"            json:"start,omitempty"`
-	Install        InstallConfig     `toml:"install"          yaml:"install"          json:"install,omitempty"`
-	RuntimeConfig  RuntimeCfg        `toml:"runtime_config"   yaml:"runtime_config"   json:"runtime_config,omitempty"`
+	Install        InstallConfig            `toml:"install"          yaml:"install"          json:"install,omitempty"`
+	RuntimeConfig  RuntimeCfg               `toml:"runtime_config"   yaml:"runtime_config"   json:"runtime_config,omitempty"`
+	Secrets        map[string]SecretConfig   `toml:"secrets"          yaml:"secrets"          json:"secrets,omitempty"`
 }
 
 // BuildConfig groups build-time overrides.
@@ -42,6 +43,13 @@ type StartConfig struct {
 type InstallConfig struct {
 	Command    string   `toml:"command"     yaml:"command"     json:"command,omitempty"`
 	SystemDeps []string `toml:"system_deps" yaml:"system_deps" json:"system_deps,omitempty"`
+}
+
+// SecretConfig defines a build-time secret from docksmith.toml.
+// At least one of Target (file mount path) or Env (env var name) must be set.
+type SecretConfig struct {
+	Target string `toml:"target" yaml:"target" json:"target,omitempty"`
+	Env    string `toml:"env"    yaml:"env"    json:"env,omitempty"`
 }
 
 // RuntimeCfg groups runtime-stage overrides.
@@ -167,8 +175,9 @@ type rawConfig struct {
 	Env            map[string]string `toml:"env"             yaml:"env"             json:"env,omitempty"`
 	Build          BuildConfig       `toml:"build"           yaml:"build"           json:"build,omitempty"`
 	Start          StartConfig       `toml:"start"           yaml:"start"           json:"start,omitempty"`
-	Install        InstallConfig     `toml:"install"         yaml:"install"         json:"install,omitempty"`
-	RuntimeConfig  rawRuntimeCfg     `toml:"runtime_config"  yaml:"runtime_config"  json:"runtime_config,omitempty"`
+	Install        InstallConfig            `toml:"install"         yaml:"install"         json:"install,omitempty"`
+	RuntimeConfig  rawRuntimeCfg            `toml:"runtime_config"  yaml:"runtime_config"  json:"runtime_config,omitempty"`
+	Secrets        map[string]SecretConfig   `toml:"secrets"         yaml:"secrets"         json:"secrets,omitempty"`
 }
 
 // ParseConfig parses raw config data based on the file extension in name.
@@ -212,6 +221,7 @@ func ParseConfig(name string, data []byte) (*Config, error) {
 		Start:          raw.Start,
 		Install:        raw.Install,
 		RuntimeConfig:  rc,
+		Secrets:        raw.Secrets,
 	}, nil
 }
 
@@ -228,6 +238,21 @@ func (c *Config) Validate() error {
 	}
 	if c.Start.Command == "" && c.Runtime != "static" {
 		return fmt.Errorf("start.command is required for runtime %q", c.Runtime)
+	}
+	return c.validateSecrets()
+}
+
+func (c *Config) validateSecrets() error {
+	for id, sec := range c.Secrets {
+		if id == "" {
+			return fmt.Errorf("secrets: empty secret ID")
+		}
+		if sec.Target == "" && sec.Env == "" {
+			return fmt.Errorf("secrets.%s: at least one of target or env must be set", id)
+		}
+		if sec.Target != "" && strings.Contains(sec.Target, "..") {
+			return fmt.Errorf("secrets.%s: target path must not contain '..'", id)
+		}
 	}
 	return nil
 }

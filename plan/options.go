@@ -1,5 +1,7 @@
 package plan
 
+import "github.com/permanu/docksmith/core"
+
 // PlanConfig holds user-specified overrides for Plan().
 // A nil pointer means "not set — use default". A non-nil pointer (even &"")
 // means "explicitly set — use this value, possibly disabling the feature".
@@ -16,6 +18,7 @@ type PlanConfig struct {
 	StartCmd     *string
 	SystemDeps   []string
 	NoBuildCache bool
+	Secrets      []core.SecretMount
 }
 
 // planConfig is an internal alias kept for transition clarity.
@@ -83,6 +86,10 @@ func WithSystemDeps(deps ...string) PlanOption {
 
 func WithBuildCacheDisabled() PlanOption {
 	return planOptionFunc(func(c *planConfig) { c.NoBuildCache = true })
+}
+
+func WithSecrets(secrets []core.SecretMount) PlanOption {
+	return planOptionFunc(func(c *planConfig) { c.Secrets = secrets })
 }
 
 // ResolvePlanConfig resolves a slice of PlanOption into a PlanConfig.
