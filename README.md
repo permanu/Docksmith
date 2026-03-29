@@ -139,7 +139,7 @@ Every generated Dockerfile gets these by default:
 
 There are good tools in this space. Here's why I built another one.
 
-**Railpack** powers all Railway deployments and produces smaller images than docksmith does — Railway reports 38% smaller Node and 77% smaller Python images vs Nixpacks. It builds OCI images directly via BuildKit LLB, which means parallel layer execution and graph-level optimization that a flat Dockerfile can't match. If you're on Railway, just use Railpack. If you're building your own platform and want to hand users a Dockerfile they can read, modify, and commit — that's where docksmith fits.
+**Railpack** powers all Railway deployments. It builds OCI images directly via BuildKit LLB, which gives it parallel layer execution and graph-level optimization. Railway reports 38% smaller images vs Nixpacks — but that's an LLB advantage, not a base image one. Docksmith uses the same alpine/slim/distroless bases and multi-stage pruning, so final image sizes are comparable. The difference is execution model: Railpack controls the build; docksmith generates a Dockerfile and gets out of the way. If you're on Railway, just use Railpack. If you want a readable Dockerfile you can commit, modify, and build anywhere — that's docksmith.
 
 **Nixpacks** is in maintenance mode (Railway recommends Railpack), but it covers 23 language providers including Crystal, Haskell, Dart, and Zig. Docksmith doesn't support those. If you need one of those runtimes, Nixpacks is still the answer.
 
