@@ -90,7 +90,7 @@ func writeAtomic(path string, data []byte) {
 	}
 }
 
-func userFrameworksDir() (string, error) {
+func UserFrameworksDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err

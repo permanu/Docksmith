@@ -111,7 +111,7 @@ func InstallFramework(entry Entry) (string, error) {
 		return "", err
 	}
 
-	destDir, err := userFrameworksDir()
+	destDir, err := UserFrameworksDir()
 	if err != nil {
 		return "", fmt.Errorf("install %s: %w", safeName, err)
 	}

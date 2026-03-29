@@ -19,3 +19,9 @@ func ExtractMajorVersion(constraint string) string { return extractMajorVersion(
 
 // ContainedPath joins base and rel, verifying the result stays under base.
 func ContainedPath(base, rel string) (string, error) { return containedPath(base, rel) }
+
+// GetDetectors returns the current detector registry. For testing only.
+func GetDetectors() []NamedDetector { return detectors }
+
+// SetDetectors replaces the detector registry. For testing only.
+func SetDetectors(d []NamedDetector) { detectors = d }
