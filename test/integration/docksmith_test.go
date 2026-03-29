@@ -1,4 +1,4 @@
-package docksmith_test
+package integration_test
 
 import (
 	"errors"
@@ -9,7 +9,7 @@ import (
 )
 
 func TestBuild_nextjs(t *testing.T) {
-	dockerfile, fw, err := docksmith.Build("testdata/fixtures/node-nextjs")
+	dockerfile, fw, err := docksmith.Build("../../testdata/fixtures/node-nextjs")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -25,7 +25,7 @@ func TestBuild_nextjs(t *testing.T) {
 }
 
 func TestBuild_pythonDjango(t *testing.T) {
-	dockerfile, fw, err := docksmith.Build("testdata/fixtures/python-django")
+	dockerfile, fw, err := docksmith.Build("../../testdata/fixtures/python-django")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestBuild_pythonDjango(t *testing.T) {
 }
 
 func TestBuild_goStdRoot(t *testing.T) {
-	dockerfile, fw, err := docksmith.Build("testdata/fixtures/go-std-root")
+	dockerfile, fw, err := docksmith.Build("../../testdata/fixtures/go-std-root")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestBuild_goStdRoot(t *testing.T) {
 }
 
 func TestBuild_emptyDir(t *testing.T) {
-	_, _, err := docksmith.Build("testdata/fixtures/empty-dir")
+	_, _, err := docksmith.Build("../../testdata/fixtures/empty-dir")
 	if err == nil {
 		t.Fatal("expected error for empty dir, got nil")
 	}
@@ -61,7 +61,7 @@ func TestBuild_emptyDir(t *testing.T) {
 }
 
 func TestBuild_withDockerfile(t *testing.T) {
-	dockerfile, fw, err := docksmith.Build("testdata/fixtures/with-dockerfile")
+	dockerfile, fw, err := docksmith.Build("../../testdata/fixtures/with-dockerfile")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestGenerateDockerfile_nilReturnsEmpty(t *testing.T) {
 
 func TestBuildWithOptions_customConfig(t *testing.T) {
 	opts := docksmith.DetectOptions{}
-	dockerfile, fw, err := docksmith.BuildWithOptions("testdata/fixtures/node-nextjs", opts)
+	dockerfile, fw, err := docksmith.BuildWithOptions("../../testdata/fixtures/node-nextjs", opts)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -1,12 +1,14 @@
-package docksmith
+package integration_test
 
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/permanu/docksmith"
 )
 
 func TestFrameworkJSONRoundTrip(t *testing.T) {
-	fw := Framework{
+	fw := docksmith.Framework{
 		Name:           "nextjs",
 		BuildCommand:   "npm run build",
 		StartCommand:   "npm start",
@@ -22,7 +24,7 @@ func TestFrameworkJSONRoundTrip(t *testing.T) {
 		t.Fatalf("ToJSON: %v", err)
 	}
 
-	got, err := FrameworkFromJSON(data)
+	got, err := docksmith.FrameworkFromJSON(data)
 	if err != nil {
 		t.Fatalf("FrameworkFromJSON: %v", err)
 	}
@@ -59,7 +61,7 @@ func TestFrameworkJSONRoundTrip(t *testing.T) {
 }
 
 func TestFrameworkOmitemptyFields(t *testing.T) {
-	fw := Framework{
+	fw := docksmith.Framework{
 		Name:         "go",
 		BuildCommand: "go build -o app .",
 		StartCommand: "./app",
@@ -91,32 +93,32 @@ func TestFrameworkOmitemptyFields(t *testing.T) {
 }
 
 func TestFrameworkFromJSONEmptyData(t *testing.T) {
-	_, err := FrameworkFromJSON(nil)
+	_, err := docksmith.FrameworkFromJSON(nil)
 	if err == nil {
 		t.Fatal("expected error for nil data, got nil")
 	}
 
-	_, err = FrameworkFromJSON([]byte{})
+	_, err = docksmith.FrameworkFromJSON([]byte{})
 	if err == nil {
 		t.Fatal("expected error for empty data, got nil")
 	}
 }
 
 func TestFrameworkFromJSONInvalidJSON(t *testing.T) {
-	_, err := FrameworkFromJSON([]byte(`{not valid json`))
+	_, err := docksmith.FrameworkFromJSON([]byte(`{not valid json`))
 	if err == nil {
 		t.Fatal("expected error for invalid JSON, got nil")
 	}
 }
 
 func TestErrorSentinelsDistinct(t *testing.T) {
-	if ErrNotDetected == ErrInvalidConfig {
+	if docksmith.ErrNotDetected == docksmith.ErrInvalidConfig {
 		t.Error("ErrNotDetected and ErrInvalidConfig must be distinct")
 	}
-	if ErrNotDetected == ErrInvalidPlan {
+	if docksmith.ErrNotDetected == docksmith.ErrInvalidPlan {
 		t.Error("ErrNotDetected and ErrInvalidPlan must be distinct")
 	}
-	if ErrInvalidConfig == ErrInvalidPlan {
+	if docksmith.ErrInvalidConfig == docksmith.ErrInvalidPlan {
 		t.Error("ErrInvalidConfig and ErrInvalidPlan must be distinct")
 	}
 }

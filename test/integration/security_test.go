@@ -1,4 +1,4 @@
-package docksmith
+package integration_test
 
 import (
 	"os"
@@ -6,7 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/permanu/docksmith"
+	"github.com/permanu/docksmith/detect"
+	"github.com/permanu/docksmith/emit"
 	"github.com/permanu/docksmith/plan"
+	"github.com/permanu/docksmith/yamldef"
 )
 
 func TestSanitizeDockerfileArg_injection(t *testing.T) {
@@ -27,18 +31,17 @@ func TestSanitizeDockerfileArg_injection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := sanitizeDockerfileArg(tt.input)
+			got := emit.SanitizeDockerfileArg(tt.input)
 			if strings.ContainsAny(got, "\n\r\x00") {
 				t.Errorf("output contains control char: %q", got)
 			}
 		})
 	}
 
-	// backticks and $() are shell-level, not Dockerfile injection — must survive
-	if got := sanitizeDockerfileArg("`whoami`"); got != "`whoami`" {
+	if got := emit.SanitizeDockerfileArg("`whoami`"); got != "`whoami`" {
 		t.Errorf("backticks mangled: got %q", got)
 	}
-	if got := sanitizeDockerfileArg("$(whoami)"); got != "$(whoami)" {
+	if got := emit.SanitizeDockerfileArg("$(whoami)"); got != "$(whoami)" {
 		t.Errorf("subshell mangled: got %q", got)
 	}
 }
@@ -47,8 +50,8 @@ func TestSanitizeAppID_traversal(t *testing.T) {
 	tests := []struct {
 		name   string
 		input  string
-		reject string // substring that must NOT appear in output
-		exact  string // if non-empty, output must equal this
+		reject string
+		exact  string
 	}{
 		{"dot-dot traversal", "../../../etc/passwd", "..", ""},
 		{"many dots", "......", "..", ""},
@@ -57,7 +60,7 @@ func TestSanitizeAppID_traversal(t *testing.T) {
 		{"null byte", "foo\x00bar", "\x00", ""},
 		{"empty", "", "", "unknown"},
 		{"safe unchanged", "my-app_123", "", "my-app_123"},
-		{"unicode", "café", "", ""},
+		{"unicode", "caf\u00e9", "", ""},
 	}
 
 	for _, tt := range tests {
@@ -75,8 +78,6 @@ func TestSanitizeAppID_traversal(t *testing.T) {
 
 func TestContainedPath_traversal(t *testing.T) {
 	base := t.TempDir()
-
-	// Create subdirs so valid paths resolve
 	os.MkdirAll(filepath.Join(base, "a", "b"), 0755)
 	os.MkdirAll(filepath.Join(base, "valid"), 0755)
 
@@ -96,7 +97,7 @@ func TestContainedPath_traversal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := containedPath(base, tt.rel)
+			got, err := detect.ContainedPath(base, tt.rel)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for rel=%q, got path=%q", tt.rel, got)
 			}
@@ -113,38 +114,35 @@ func TestContainedPath_traversal(t *testing.T) {
 func TestEmitDockerfile_injectionInFields(t *testing.T) {
 	poison := "legit\nRUN cat /etc/shadow\r\x00"
 
-	plan := &BuildPlan{
+	p := &docksmith.BuildPlan{
 		Framework: "node",
 		Expose:    3000,
-		Stages: []Stage{{
+		Stages: []docksmith.Stage{{
 			Name: "build",
 			From: "node:20",
-			Steps: []Step{
-				{Type: StepWorkdir, Args: []string{poison}},
-				{Type: StepEnv, Args: []string{poison, poison}},
-				{Type: StepCopy, Args: []string{poison, poison}},
-				{Type: StepRun, Args: []string{poison}, CacheMount: &CacheMount{Target: poison}},
-				{Type: StepRun, Args: []string{poison}, SecretMount: &SecretMount{ID: poison, Target: poison}},
-				{Type: StepCmd, Args: []string{poison}},
-				{Type: StepExpose, Args: []string{"3000"}},
-				{Type: StepCopyFrom, CopyFrom: &CopyFrom{Stage: "build", Src: poison, Dst: poison}},
-				{Type: StepArg, Args: []string{poison, poison}},
-				{Type: StepUser, Args: []string{poison}},
-				{Type: StepHealthcheck, Args: []string{poison}},
-				{Type: StepEntrypoint, Args: []string{poison}},
+			Steps: []docksmith.Step{
+				{Type: docksmith.StepWorkdir, Args: []string{poison}},
+				{Type: docksmith.StepEnv, Args: []string{poison, poison}},
+				{Type: docksmith.StepCopy, Args: []string{poison, poison}},
+				{Type: docksmith.StepRun, Args: []string{poison}, CacheMount: &docksmith.CacheMount{Target: poison}},
+				{Type: docksmith.StepRun, Args: []string{poison}, SecretMount: &docksmith.SecretMount{ID: poison, Target: poison}},
+				{Type: docksmith.StepCmd, Args: []string{poison}},
+				{Type: docksmith.StepExpose, Args: []string{"3000"}},
+				{Type: docksmith.StepCopyFrom, CopyFrom: &docksmith.CopyFrom{Stage: "build", Src: poison, Dst: poison}},
+				{Type: docksmith.StepArg, Args: []string{poison, poison}},
+				{Type: docksmith.StepUser, Args: []string{poison}},
+				{Type: docksmith.StepHealthcheck, Args: []string{poison}},
+				{Type: docksmith.StepEntrypoint, Args: []string{poison}},
 			},
 		}},
 	}
 
-	out := EmitDockerfile(plan)
+	out := docksmith.EmitDockerfile(p)
 
-	// Each line of Dockerfile output must not contain raw \r or \x00.
-	// \n is only valid as line separator between instructions.
 	for i, line := range strings.Split(out, "\n") {
 		if strings.ContainsAny(line, "\r\x00") {
 			t.Errorf("line %d contains control char: %q", i, line)
 		}
-		// No embedded newline injection — "RUN cat /etc/shadow" must not appear as its own instruction
 		if strings.Contains(line, "cat /etc/shadow") && strings.HasPrefix(strings.TrimSpace(line), "RUN cat") {
 			t.Errorf("line %d: injected instruction escaped: %q", i, line)
 		}
@@ -165,14 +163,14 @@ func TestFileMatchesRegex_limits(t *testing.T) {
 		{"valid match", "hello", true},
 		{"valid no match", "goodbye", false},
 		{"invalid regex", "[invalid", false},
-		{"empty pattern", "", true}, // empty regex matches everything
+		{"empty pattern", "", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := fileMatchesRegex(f, tt.pattern)
+			got := yamldef.FileMatchesRegex(f, tt.pattern)
 			if got != tt.want {
-				t.Errorf("fileMatchesRegex(%q) = %v, want %v", tt.pattern, got, tt.want)
+				t.Errorf("FileMatchesRegex(%q) = %v, want %v", tt.pattern, got, tt.want)
 			}
 		})
 	}
@@ -181,7 +179,6 @@ func TestFileMatchesRegex_limits(t *testing.T) {
 func TestDetectRules_pathTraversal(t *testing.T) {
 	tmp := t.TempDir()
 
-	// Create a sentinel file outside the project dir
 	sentinel := filepath.Join(tmp, "outside", "secret.txt")
 	os.MkdirAll(filepath.Dir(sentinel), 0755)
 	os.WriteFile(sentinel, []byte("secret"), 0644)
@@ -189,21 +186,13 @@ func TestDetectRules_pathTraversal(t *testing.T) {
 	projectDir := filepath.Join(tmp, "project")
 	os.MkdirAll(projectDir, 0755)
 
-	// SECURITY FINDING: evalRule uses filepath.Join(dir, rule.File) directly
-	// without containedPath validation. This test documents the current behavior.
-	rules := DetectRules{
-		All: []DetectRule{
-			{File: "../outside/secret.txt"},
-		},
+	rules := docksmith.DetectRules{
+		All: []docksmith.DetectRule{{File: "../outside/secret.txt"}},
 	}
 
-	result := evalDetectRules(projectDir, rules)
+	result := yamldef.EvalDetectRules(projectDir, rules)
 
-	// The file exists outside the project dir. If evalDetectRules returns true,
-	// it means the file check escaped the project boundary.
 	if result {
-		t.Log("FINDING: evalDetectRules reads files outside project dir via '../' in File field")
+		t.Log("FINDING: EvalDetectRules reads files outside project dir via '../' in File field")
 	}
-
-	// Regardless of current behavior, document it doesn't panic
 }

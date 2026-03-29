@@ -1,4 +1,4 @@
-package docksmith_test
+package integration_test
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 )
 
 func ExampleDetect() {
-	fw, err := docksmith.Detect("testdata/fixtures/with-dockerfile")
+	fw, err := docksmith.Detect("../../testdata/fixtures/with-dockerfile")
 	if err != nil {
 		fmt.Println("error:", err)
 		return

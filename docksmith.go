@@ -502,7 +502,13 @@ func versionForBase(base string, fw *Framework) string {
 // unknown tokens are left in-place (never an error). Supported variables:
 // {{runtime}}, {{version}}, {{pm}}, {{lockfile}}, {{install_command}},
 // {{build_command}}, {{start_command}}, {{port}}.
-func buildPlanFromDef(def *FrameworkDef, dir string) (*BuildPlan, error) {
+// BuildPlanFromDefDir builds a BuildPlan from a FrameworkDef by resolving
+// version and package manager from the given project directory.
+func BuildPlanFromDefDir(def *FrameworkDef, dir string) (*BuildPlan, error) {
+	return buildPlanFromDefDir(def, dir)
+}
+
+func buildPlanFromDefDir(def *FrameworkDef, dir string) (*BuildPlan, error) {
 	if def == nil {
 		return nil, fmt.Errorf("buildPlanFromDef: def must not be nil")
 	}

@@ -1,7 +1,9 @@
-package docksmith
+package emit_test
 
 import (
 	"testing"
+
+	"github.com/permanu/docksmith/emit"
 )
 
 func TestSanitizeDockerfileArg(t *testing.T) {
@@ -17,8 +19,8 @@ func TestSanitizeDockerfileArg(t *testing.T) {
 		{"", ""},
 	}
 	for _, c := range cases {
-		if got := sanitizeDockerfileArg(c.input); got != c.want {
-			t.Errorf("sanitizeDockerfileArg(%q) = %q, want %q", c.input, got, c.want)
+		if got := emit.SanitizeDockerfileArg(c.input); got != c.want {
+			t.Errorf("SanitizeDockerfileArg(%q) = %q, want %q", c.input, got, c.want)
 		}
 	}
 }
@@ -35,13 +37,13 @@ func TestShellSplit(t *testing.T) {
 		{"", ""},
 	}
 	for _, c := range cases {
-		if got := shellSplit(c.input); got != c.want {
-			t.Errorf("shellSplit(%q) = %q, want %q", c.input, got, c.want)
+		if got := emit.ShellSplit(c.input); got != c.want {
+			t.Errorf("ShellSplit(%q) = %q, want %q", c.input, got, c.want)
 		}
 	}
 }
 
-func TestJsonArray(t *testing.T) {
+func TestJSONArray(t *testing.T) {
 	cases := []struct {
 		input string
 		want  string
@@ -52,13 +54,13 @@ func TestJsonArray(t *testing.T) {
 		{"", "[]"},
 	}
 	for _, c := range cases {
-		if got := jsonArray(c.input); got != c.want {
-			t.Errorf("jsonArray(%q) = %q, want %q", c.input, got, c.want)
+		if got := emit.JSONArray(c.input); got != c.want {
+			t.Errorf("JSONArray(%q) = %q, want %q", c.input, got, c.want)
 		}
 	}
 }
 
-func TestPmCopyLockfiles(t *testing.T) {
+func TestPMCopyLockfiles(t *testing.T) {
 	cases := []struct {
 		pm      string
 		contain string
@@ -70,9 +72,9 @@ func TestPmCopyLockfiles(t *testing.T) {
 		{"unknown", "package-lock.json"},
 	}
 	for _, c := range cases {
-		got := pmCopyLockfiles(c.pm)
+		got := emit.PMCopyLockfiles(c.pm)
 		if got == "" {
-			t.Errorf("pmCopyLockfiles(%q) returned empty string", c.pm)
+			t.Errorf("PMCopyLockfiles(%q) returned empty string", c.pm)
 			continue
 		}
 		found := false
@@ -83,7 +85,7 @@ func TestPmCopyLockfiles(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Errorf("pmCopyLockfiles(%q) = %q, want it to contain %q", c.pm, got, c.contain)
+			t.Errorf("PMCopyLockfiles(%q) = %q, want it to contain %q", c.pm, got, c.contain)
 		}
 	}
 }

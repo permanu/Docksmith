@@ -1,9 +1,10 @@
-package docksmith
+package integration_test
 
 import (
 	"path/filepath"
 	"testing"
 
+	"github.com/permanu/docksmith"
 	"github.com/permanu/docksmith/plan"
 )
 
@@ -12,7 +13,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestLoadConfig_Nested_TOML_BasicFields(t *testing.T) {
-	cfg, err := LoadConfig(filepath.Join("testdata", "fixtures", "config-nested-toml"))
+	cfg, err := docksmith.LoadConfig(filepath.Join("../../testdata", "fixtures", "config-nested-toml"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -37,11 +38,11 @@ func TestLoadConfig_Nested_TOML_BasicFields(t *testing.T) {
 }
 
 func TestLoadConfig_Nested_TOML_UserString(t *testing.T) {
-	cfg, err := LoadConfig(filepath.Join("testdata", "fixtures", "config-nested-toml-user"))
+	cfg, err := docksmith.LoadConfig(filepath.Join("../../testdata", "fixtures", "config-nested-toml-user"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	opts, err := ConfigToPlanOptions(cfg)
+	opts, err := docksmith.ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -55,11 +56,11 @@ func TestLoadConfig_Nested_TOML_UserString(t *testing.T) {
 }
 
 func TestLoadConfig_Nested_TOML_UserFalse_DisablesUser(t *testing.T) {
-	cfg, err := LoadConfig(filepath.Join("testdata", "fixtures", "config-nested-toml-user-false"))
+	cfg, err := docksmith.LoadConfig(filepath.Join("../../testdata", "fixtures", "config-nested-toml-user-false"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	opts, err := ConfigToPlanOptions(cfg)
+	opts, err := docksmith.ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -73,11 +74,11 @@ func TestLoadConfig_Nested_TOML_UserFalse_DisablesUser(t *testing.T) {
 }
 
 func TestLoadConfig_Nested_TOML_HealthcheckDisabled(t *testing.T) {
-	cfg, err := LoadConfig(filepath.Join("testdata", "fixtures", "config-nested-toml-hc-false"))
+	cfg, err := docksmith.LoadConfig(filepath.Join("../../testdata", "fixtures", "config-nested-toml-hc-false"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	opts, err := ConfigToPlanOptions(cfg)
+	opts, err := docksmith.ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -91,11 +92,11 @@ func TestLoadConfig_Nested_TOML_HealthcheckDisabled(t *testing.T) {
 }
 
 func TestLoadConfig_Nested_TOML_HealthcheckString(t *testing.T) {
-	cfg, err := LoadConfig(filepath.Join("testdata", "fixtures", "config-nested-toml-hc-cmd"))
+	cfg, err := docksmith.LoadConfig(filepath.Join("../../testdata", "fixtures", "config-nested-toml-hc-cmd"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	opts, err := ConfigToPlanOptions(cfg)
+	opts, err := docksmith.ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -109,11 +110,11 @@ func TestLoadConfig_Nested_TOML_HealthcheckString(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// LoadPlanOptions — convenience loader
+// LoadPlanOptions
 // ---------------------------------------------------------------------------
 
 func TestLoadPlanOptions_ReturnsOptions(t *testing.T) {
-	opts, err := LoadPlanOptions(filepath.Join("testdata", "fixtures", "config-nested-toml"))
+	opts, err := docksmith.LoadPlanOptions(filepath.Join("../../testdata", "fixtures", "config-nested-toml"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -128,7 +129,7 @@ func TestLoadPlanOptions_ReturnsOptions(t *testing.T) {
 
 func TestLoadPlanOptions_NoConfigFile_ReturnsEmptySlice(t *testing.T) {
 	dir := t.TempDir()
-	opts, err := LoadPlanOptions(dir)
+	opts, err := docksmith.LoadPlanOptions(dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -138,16 +139,16 @@ func TestLoadPlanOptions_NoConfigFile_ReturnsEmptySlice(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ToPlanOptions — field mapping
+// ToPlanOptions
 // ---------------------------------------------------------------------------
 
 func TestToPlanOptions_BuildCommand(t *testing.T) {
-	cfg := &Config{
+	cfg := &docksmith.Config{
 		Runtime: "go",
-		Build:   BuildConfig{Command: "make build"},
-		Start:   StartConfig{Command: "./server"},
+		Build:   docksmith.BuildConfig{Command: "make build"},
+		Start:   docksmith.StartConfig{Command: "./server"},
 	}
-	opts, err := ConfigToPlanOptions(cfg)
+	opts, err := docksmith.ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -158,11 +159,11 @@ func TestToPlanOptions_BuildCommand(t *testing.T) {
 }
 
 func TestToPlanOptions_StartCommand(t *testing.T) {
-	cfg := &Config{
+	cfg := &docksmith.Config{
 		Runtime: "node",
-		Start:   StartConfig{Command: "node dist/index.js"},
+		Start:   docksmith.StartConfig{Command: "node dist/index.js"},
 	}
-	opts, err := ConfigToPlanOptions(cfg)
+	opts, err := docksmith.ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -173,12 +174,12 @@ func TestToPlanOptions_StartCommand(t *testing.T) {
 }
 
 func TestToPlanOptions_ExtraEnv(t *testing.T) {
-	cfg := &Config{
+	cfg := &docksmith.Config{
 		Runtime: "python",
-		Start:   StartConfig{Command: "gunicorn app:app"},
+		Start:   docksmith.StartConfig{Command: "gunicorn app:app"},
 		Env:     map[string]string{"PORT": "8000"},
 	}
-	opts, err := ConfigToPlanOptions(cfg)
+	opts, err := docksmith.ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -189,12 +190,12 @@ func TestToPlanOptions_ExtraEnv(t *testing.T) {
 }
 
 func TestToPlanOptions_SystemDeps(t *testing.T) {
-	cfg := &Config{
+	cfg := &docksmith.Config{
 		Runtime: "python",
-		Start:   StartConfig{Command: "gunicorn app:app"},
-		Install: InstallConfig{SystemDeps: []string{"libpq-dev", "curl"}},
+		Start:   docksmith.StartConfig{Command: "gunicorn app:app"},
+		Install: docksmith.InstallConfig{SystemDeps: []string{"libpq-dev", "curl"}},
 	}
-	opts, err := ConfigToPlanOptions(cfg)
+	opts, err := docksmith.ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -205,12 +206,11 @@ func TestToPlanOptions_SystemDeps(t *testing.T) {
 }
 
 func TestToPlanOptions_NoBuildCache(t *testing.T) {
-	cfg := &Config{
-		Runtime: "go",
-		Start:   StartConfig{Command: "./server"},
-		Build:   BuildConfig{NoCache: true},
+	cfg := &docksmith.Config{
+		Runtime: "go", Start: docksmith.StartConfig{Command: "./server"},
+		Build: docksmith.BuildConfig{NoCache: true},
 	}
-	opts, err := ConfigToPlanOptions(cfg)
+	opts, err := docksmith.ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -221,14 +221,11 @@ func TestToPlanOptions_NoBuildCache(t *testing.T) {
 }
 
 func TestToPlanOptions_RuntimeImage(t *testing.T) {
-	cfg := &Config{
-		Runtime: "go",
-		Start:   StartConfig{Command: "./server"},
-		RuntimeConfig: RuntimeCfg{
-			Image: "gcr.io/distroless/static:nonroot",
-		},
+	cfg := &docksmith.Config{
+		Runtime: "go", Start: docksmith.StartConfig{Command: "./server"},
+		RuntimeConfig: docksmith.RuntimeCfg{Image: "gcr.io/distroless/static:nonroot"},
 	}
-	opts, err := ConfigToPlanOptions(cfg)
+	opts, err := docksmith.ConfigToPlanOptions(cfg)
 	if err != nil {
 		t.Fatalf("ToPlanOptions: %v", err)
 	}
@@ -245,14 +242,14 @@ func TestToPlanOptions_RuntimeImage(t *testing.T) {
 func TestLoadConfig_Nested_UnknownKey_ReturnsError(t *testing.T) {
 	dir := t.TempDir()
 	mustWriteFile(t, dir+"/docksmith.toml", "runtime = \"go\"\nstart_cmd = \"./server\"\n[start]\ncommand = \"./server\"\n")
-	_, err := LoadConfig(dir)
+	_, err := docksmith.LoadConfig(dir)
 	if err == nil {
 		t.Fatal("want error for unknown key start_cmd")
 	}
 }
 
 func TestLoadConfig_NestedYAML_Parses(t *testing.T) {
-	cfg, err := LoadConfig(filepath.Join("testdata", "fixtures", "config-yaml"))
+	cfg, err := docksmith.LoadConfig(filepath.Join("../../testdata", "fixtures", "config-yaml"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -262,7 +259,7 @@ func TestLoadConfig_NestedYAML_Parses(t *testing.T) {
 }
 
 func TestLoadConfig_NestedJSON_Parses(t *testing.T) {
-	cfg, err := LoadConfig(filepath.Join("testdata", "fixtures", "config-json"))
+	cfg, err := docksmith.LoadConfig(filepath.Join("../../testdata", "fixtures", "config-json"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

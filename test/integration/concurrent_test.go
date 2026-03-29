@@ -1,21 +1,23 @@
-package docksmith
+package integration_test
 
 import (
 	"sync"
 	"testing"
+
+	"github.com/permanu/docksmith"
 )
 
 func TestConcurrentDetect(t *testing.T) {
 	const n = 100
 	var wg sync.WaitGroup
-	results := make([]*Framework, n)
+	results := make([]*docksmith.Framework, n)
 	errs := make([]error, n)
 
 	wg.Add(n)
 	for i := range n {
 		go func(idx int) {
 			defer wg.Done()
-			results[idx], errs[idx] = Detect("testdata/fixtures/node-nextjs")
+			results[idx], errs[idx] = docksmith.Detect("../../testdata/fixtures/node-nextjs")
 		}(i)
 	}
 	wg.Wait()
@@ -43,7 +45,7 @@ func TestConcurrentBuild(t *testing.T) {
 	for i := range n {
 		go func(idx int) {
 			defer wg.Done()
-			dockerfiles[idx], _, errs[idx] = Build("testdata/fixtures/python-django")
+			dockerfiles[idx], _, errs[idx] = docksmith.Build("../../testdata/fixtures/python-django")
 		}(i)
 	}
 	wg.Wait()
@@ -59,17 +61,17 @@ func TestConcurrentBuild(t *testing.T) {
 }
 
 func TestConcurrentEmitDockerfile(t *testing.T) {
-	plan := &BuildPlan{
+	plan := &docksmith.BuildPlan{
 		Framework: "test",
 		Expose:    8080,
-		Stages: []Stage{{
+		Stages: []docksmith.Stage{{
 			Name: "build",
 			From: "node:20-alpine",
-			Steps: []Step{
-				{Type: StepWorkdir, Args: []string{"/app"}},
-				{Type: StepCopy, Args: []string{".", "."}},
-				{Type: StepRun, Args: []string{"npm install"}},
-				{Type: StepCmd, Args: []string{"npm start"}},
+			Steps: []docksmith.Step{
+				{Type: docksmith.StepWorkdir, Args: []string{"/app"}},
+				{Type: docksmith.StepCopy, Args: []string{".", "."}},
+				{Type: docksmith.StepRun, Args: []string{"npm install"}},
+				{Type: docksmith.StepCmd, Args: []string{"npm start"}},
 			},
 		}},
 	}
@@ -82,7 +84,7 @@ func TestConcurrentEmitDockerfile(t *testing.T) {
 	for i := range n {
 		go func(idx int) {
 			defer wg.Done()
-			results[idx] = EmitDockerfile(plan)
+			results[idx] = docksmith.EmitDockerfile(plan)
 		}(i)
 	}
 	wg.Wait()
@@ -97,14 +99,14 @@ func TestConcurrentEmitDockerfile(t *testing.T) {
 func TestConcurrentLoadConfig(t *testing.T) {
 	const n = 50
 	var wg sync.WaitGroup
-	configs := make([]*Config, n)
+	configs := make([]*docksmith.Config, n)
 	errs := make([]error, n)
 
 	wg.Add(n)
 	for i := range n {
 		go func(idx int) {
 			defer wg.Done()
-			configs[idx], errs[idx] = LoadConfig("testdata/fixtures/empty-dir")
+			configs[idx], errs[idx] = docksmith.LoadConfig("../../testdata/fixtures/empty-dir")
 		}(i)
 	}
 	wg.Wait()

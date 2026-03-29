@@ -1,67 +1,69 @@
-package docksmith
+package integration_test
 
 import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/permanu/docksmith"
 )
 
 // helpers -----------------------------------------------------------------
 
-func mustNodePlan(t *testing.T) *BuildPlan {
+func mustNodePlan(t *testing.T) *docksmith.BuildPlan {
 	t.Helper()
-	fw := &Framework{
+	fw := &docksmith.Framework{
 		Name:           "nextjs",
 		NodeVersion:    "22",
 		PackageManager: "npm",
 		Port:           3000,
 		StartCommand:   "node server.js",
 	}
-	p, err := Plan(fw)
+	p, err := docksmith.Plan(fw)
 	if err != nil {
 		t.Fatalf("Plan(nextjs): %v", err)
 	}
 	return p
 }
 
-func mustPythonPlan(t *testing.T) *BuildPlan {
+func mustPythonPlan(t *testing.T) *docksmith.BuildPlan {
 	t.Helper()
-	fw := &Framework{
+	fw := &docksmith.Framework{
 		Name:          "django",
 		PythonVersion: "3.12",
 		PythonPM:      "pip",
 		Port:          8000,
 		StartCommand:  "gunicorn myapp.wsgi:application",
 	}
-	p, err := Plan(fw)
+	p, err := docksmith.Plan(fw)
 	if err != nil {
 		t.Fatalf("Plan(django): %v", err)
 	}
 	return p
 }
 
-func mustGoPlan(t *testing.T) *BuildPlan {
+func mustGoPlan(t *testing.T) *docksmith.BuildPlan {
 	t.Helper()
-	fw := &Framework{
+	fw := &docksmith.Framework{
 		Name:      "go",
 		GoVersion: "1.26",
 		Port:      8080,
 	}
-	p, err := Plan(fw)
+	p, err := docksmith.Plan(fw)
 	if err != nil {
 		t.Fatalf("Plan(go): %v", err)
 	}
 	return p
 }
 
-func mustStaticPlan(t *testing.T) *BuildPlan {
+func mustStaticPlan(t *testing.T) *docksmith.BuildPlan {
 	t.Helper()
-	fw := &Framework{
+	fw := &docksmith.Framework{
 		Name:      "static",
 		OutputDir: "public",
 		Port:      0,
 	}
-	p, err := Plan(fw)
+	p, err := docksmith.Plan(fw)
 	if err != nil {
 		t.Fatalf("Plan(static): %v", err)
 	}
@@ -72,40 +74,33 @@ func mustStaticPlan(t *testing.T) *BuildPlan {
 
 func TestEmitDockerfile_NodeJS_MultiStage(t *testing.T) {
 	plan := mustNodePlan(t)
-	out := EmitDockerfile(plan)
+	out := docksmith.EmitDockerfile(plan)
 
-	// FROM lines
 	assertContains(t, out, "FROM node:22-alpine AS deps")
 	assertContains(t, out, "FROM deps AS build")
 	assertContains(t, out, "FROM node:22-alpine AS runtime")
 
-	// multi-stage structure: at least 3 FROM lines
 	fromCount := strings.Count(out, "FROM ")
 	if fromCount < 3 {
-		t.Errorf("expected ≥3 FROM lines, got %d\nDockerfile:\n%s", fromCount, out)
+		t.Errorf("expected >=3 FROM lines, got %d\nDockerfile:\n%s", fromCount, out)
 	}
 }
 
 func TestEmitDockerfile_NodeJS_CopyFrom(t *testing.T) {
 	plan := mustNodePlan(t)
-	out := EmitDockerfile(plan)
-
-	// runtime stage copies /app from build with --link
+	out := docksmith.EmitDockerfile(plan)
 	assertContains(t, out, "COPY --from=build --link /app /app")
 }
 
 func TestEmitDockerfile_NodeJS_CMD(t *testing.T) {
 	plan := mustNodePlan(t)
-	out := EmitDockerfile(plan)
-
-	// CMD must be JSON array form
+	out := docksmith.EmitDockerfile(plan)
 	assertContains(t, out, `CMD ["node", "server.js"]`)
 }
 
 func TestEmitDockerfile_NodeJS_CacheMount(t *testing.T) {
 	plan := mustNodePlan(t)
-	out := EmitDockerfile(plan)
-
+	out := docksmith.EmitDockerfile(plan)
 	assertContains(t, out, "--mount=type=cache,target=/root/.npm")
 	assertContains(t, out, "npm ci")
 }
@@ -114,23 +109,19 @@ func TestEmitDockerfile_NodeJS_CacheMount(t *testing.T) {
 
 func TestEmitDockerfile_Python_VenvCopy(t *testing.T) {
 	plan := mustPythonPlan(t)
-	out := EmitDockerfile(plan)
-
+	out := docksmith.EmitDockerfile(plan)
 	assertContains(t, out, "COPY --from=builder /app/.venv /app/.venv")
 }
 
 func TestEmitDockerfile_Python_EnvPath(t *testing.T) {
 	plan := mustPythonPlan(t)
-	out := EmitDockerfile(plan)
-
+	out := docksmith.EmitDockerfile(plan)
 	assertContains(t, out, "ENV PATH /app/.venv/bin:$PATH")
 }
 
 func TestEmitDockerfile_Python_CMD(t *testing.T) {
 	plan := mustPythonPlan(t)
-	out := EmitDockerfile(plan)
-
-	// Python uses shell-form CMD (not exec-form) to support ${PORT} expansion.
+	out := docksmith.EmitDockerfile(plan)
 	assertContains(t, out, "CMD gunicorn")
 }
 
@@ -138,22 +129,19 @@ func TestEmitDockerfile_Python_CMD(t *testing.T) {
 
 func TestEmitDockerfile_Go_CGODisabled(t *testing.T) {
 	plan := mustGoPlan(t)
-	out := EmitDockerfile(plan)
-
+	out := docksmith.EmitDockerfile(plan)
 	assertContains(t, out, "CGO_ENABLED=0")
 }
 
 func TestEmitDockerfile_Go_DistrolessRuntime(t *testing.T) {
 	plan := mustGoPlan(t)
-	out := EmitDockerfile(plan)
-
+	out := docksmith.EmitDockerfile(plan)
 	assertContains(t, out, "FROM gcr.io/distroless/static-debian12:nonroot AS runtime")
 }
 
 func TestEmitDockerfile_Go_BinaryCopy(t *testing.T) {
 	plan := mustGoPlan(t)
-	out := EmitDockerfile(plan)
-
+	out := docksmith.EmitDockerfile(plan)
 	assertContains(t, out, "COPY --from=builder /app/app ./app")
 }
 
@@ -161,110 +149,108 @@ func TestEmitDockerfile_Go_BinaryCopy(t *testing.T) {
 
 func TestEmitDockerfile_Static_NginxBase(t *testing.T) {
 	plan := mustStaticPlan(t)
-	out := EmitDockerfile(plan)
-
+	out := docksmith.EmitDockerfile(plan)
 	assertContains(t, out, "FROM nginx:alpine AS runtime")
 }
 
 func TestEmitDockerfile_Static_CopyToHtmlRoot(t *testing.T) {
 	plan := mustStaticPlan(t)
-	out := EmitDockerfile(plan)
-
+	out := docksmith.EmitDockerfile(plan)
 	assertContains(t, out, "COPY public /usr/share/nginx/html")
 }
 
 // Step type coverage ------------------------------------------------------
 
 func TestEmitDockerfile_StepWorkdir(t *testing.T) {
-	plan := singleStepPlan(Step{Type: StepWorkdir, Args: []string{"/app"}})
-	assertContains(t, EmitDockerfile(plan), "WORKDIR /app")
+	plan := singleStepPlan(docksmith.Step{Type: docksmith.StepWorkdir, Args: []string{"/app"}})
+	assertContains(t, docksmith.EmitDockerfile(plan), "WORKDIR /app")
 }
 
 func TestEmitDockerfile_StepCopy(t *testing.T) {
-	plan := singleStepPlan(Step{Type: StepCopy, Args: []string{"src", "dst"}})
-	assertContains(t, EmitDockerfile(plan), "COPY src dst")
+	plan := singleStepPlan(docksmith.Step{Type: docksmith.StepCopy, Args: []string{"src", "dst"}})
+	assertContains(t, docksmith.EmitDockerfile(plan), "COPY src dst")
 }
 
 func TestEmitDockerfile_StepCopyWithLink(t *testing.T) {
-	plan := singleStepPlan(Step{Type: StepCopy, Args: []string{"src", "dst"}, Link: true})
-	assertContains(t, EmitDockerfile(plan), "COPY --link src dst")
+	plan := singleStepPlan(docksmith.Step{Type: docksmith.StepCopy, Args: []string{"src", "dst"}, Link: true})
+	assertContains(t, docksmith.EmitDockerfile(plan), "COPY --link src dst")
 }
 
 func TestEmitDockerfile_StepCopyFrom(t *testing.T) {
-	plan := singleStepPlan(Step{
-		Type:     StepCopyFrom,
-		CopyFrom: &CopyFrom{Stage: "build", Src: "/app/bin", Dst: "/usr/local/bin"},
+	plan := singleStepPlan(docksmith.Step{
+		Type:     docksmith.StepCopyFrom,
+		CopyFrom: &docksmith.CopyFrom{Stage: "build", Src: "/app/bin", Dst: "/usr/local/bin"},
 	})
-	assertContains(t, EmitDockerfile(plan), "COPY --from=build /app/bin /usr/local/bin")
+	assertContains(t, docksmith.EmitDockerfile(plan), "COPY --from=build /app/bin /usr/local/bin")
 }
 
 func TestEmitDockerfile_StepCopyFromWithLink(t *testing.T) {
-	plan := singleStepPlan(Step{
-		Type:     StepCopyFrom,
-		CopyFrom: &CopyFrom{Stage: "build", Src: "/app", Dst: "/app"},
+	plan := singleStepPlan(docksmith.Step{
+		Type:     docksmith.StepCopyFrom,
+		CopyFrom: &docksmith.CopyFrom{Stage: "build", Src: "/app", Dst: "/app"},
 		Link:     true,
 	})
-	assertContains(t, EmitDockerfile(plan), "COPY --from=build --link /app /app")
+	assertContains(t, docksmith.EmitDockerfile(plan), "COPY --from=build --link /app /app")
 }
 
 func TestEmitDockerfile_StepRun(t *testing.T) {
-	plan := singleStepPlan(Step{Type: StepRun, Args: []string{"echo hello"}})
-	assertContains(t, EmitDockerfile(plan), "RUN echo hello")
+	plan := singleStepPlan(docksmith.Step{Type: docksmith.StepRun, Args: []string{"echo hello"}})
+	assertContains(t, docksmith.EmitDockerfile(plan), "RUN echo hello")
 }
 
 func TestEmitDockerfile_StepRun_CacheMount(t *testing.T) {
-	plan := singleStepPlan(Step{
-		Type:       StepRun,
+	plan := singleStepPlan(docksmith.Step{
+		Type:       docksmith.StepRun,
 		Args:       []string{"npm ci"},
-		CacheMount: &CacheMount{Target: "/root/.npm"},
+		CacheMount: &docksmith.CacheMount{Target: "/root/.npm"},
 	})
-	out := EmitDockerfile(plan)
+	out := docksmith.EmitDockerfile(plan)
 	assertContains(t, out, "RUN --mount=type=cache,target=/root/.npm npm ci")
 }
 
 func TestEmitDockerfile_StepRun_SecretMount(t *testing.T) {
-	plan := singleStepPlan(Step{
-		Type:        StepRun,
+	plan := singleStepPlan(docksmith.Step{
+		Type:        docksmith.StepRun,
 		Args:        []string{"pip install -r requirements.txt"},
-		SecretMount: &SecretMount{ID: "pip-conf", Target: "/root/.pip/pip.conf"},
+		SecretMount: &docksmith.SecretMount{ID: "pip-conf", Target: "/root/.pip/pip.conf"},
 	})
-	out := EmitDockerfile(plan)
+	out := docksmith.EmitDockerfile(plan)
 	assertContains(t, out, "--mount=type=secret,id=pip-conf,target=/root/.pip/pip.conf")
 }
 
 func TestEmitDockerfile_StepEnv(t *testing.T) {
-	plan := singleStepPlan(Step{Type: StepEnv, Args: []string{"NODE_ENV", "production"}})
-	assertContains(t, EmitDockerfile(plan), "ENV NODE_ENV production")
+	plan := singleStepPlan(docksmith.Step{Type: docksmith.StepEnv, Args: []string{"NODE_ENV", "production"}})
+	assertContains(t, docksmith.EmitDockerfile(plan), "ENV NODE_ENV production")
 }
 
 func TestEmitDockerfile_StepArg(t *testing.T) {
-	plan := singleStepPlan(Step{Type: StepArg, Args: []string{"BUILD_VERSION"}})
-	assertContains(t, EmitDockerfile(plan), "ARG BUILD_VERSION")
+	plan := singleStepPlan(docksmith.Step{Type: docksmith.StepArg, Args: []string{"BUILD_VERSION"}})
+	assertContains(t, docksmith.EmitDockerfile(plan), "ARG BUILD_VERSION")
 }
 
 func TestEmitDockerfile_StepExpose(t *testing.T) {
-	plan := singleStepPlan(Step{Type: StepExpose, Args: []string{"8080"}})
-	assertContains(t, EmitDockerfile(plan), "EXPOSE 8080")
+	plan := singleStepPlan(docksmith.Step{Type: docksmith.StepExpose, Args: []string{"8080"}})
+	assertContains(t, docksmith.EmitDockerfile(plan), "EXPOSE 8080")
 }
 
 func TestEmitDockerfile_StepCmd(t *testing.T) {
-	plan := singleStepPlan(Step{Type: StepCmd, Args: []string{"node", "index.js"}})
-	assertContains(t, EmitDockerfile(plan), `CMD ["node", "index.js"]`)
+	plan := singleStepPlan(docksmith.Step{Type: docksmith.StepCmd, Args: []string{"node", "index.js"}})
+	assertContains(t, docksmith.EmitDockerfile(plan), `CMD ["node", "index.js"]`)
 }
 
 func TestEmitDockerfile_StepEntrypoint(t *testing.T) {
-	plan := singleStepPlan(Step{Type: StepEntrypoint, Args: []string{"/docker-entrypoint.sh"}})
-	assertContains(t, EmitDockerfile(plan), `ENTRYPOINT ["/docker-entrypoint.sh"]`)
+	plan := singleStepPlan(docksmith.Step{Type: docksmith.StepEntrypoint, Args: []string{"/docker-entrypoint.sh"}})
+	assertContains(t, docksmith.EmitDockerfile(plan), `ENTRYPOINT ["/docker-entrypoint.sh"]`)
 }
 
 func TestEmitDockerfile_StepUser(t *testing.T) {
-	plan := singleStepPlan(Step{Type: StepUser, Args: []string{"nobody"}})
-	assertContains(t, EmitDockerfile(plan), "USER nobody")
+	plan := singleStepPlan(docksmith.Step{Type: docksmith.StepUser, Args: []string{"nobody"}})
+	assertContains(t, docksmith.EmitDockerfile(plan), "USER nobody")
 }
 
 func TestEmitDockerfile_StepHealthcheck(t *testing.T) {
-	plan := singleStepPlan(Step{Type: StepHealthcheck, Args: []string{"curl -f http://localhost/health || exit 1"}})
-	out := EmitDockerfile(plan)
+	plan := singleStepPlan(docksmith.Step{Type: docksmith.StepHealthcheck, Args: []string{"curl -f http://localhost/health || exit 1"}})
+	out := docksmith.EmitDockerfile(plan)
 	assertContains(t, out, "HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD curl -f http://localhost/health || exit 1")
 }
 
@@ -272,28 +258,27 @@ func TestEmitDockerfile_StepHealthcheck(t *testing.T) {
 
 func TestEmitDockerfile_ExposeFromPlan(t *testing.T) {
 	plan := mustGoPlan(t)
-	out := EmitDockerfile(plan)
+	out := docksmith.EmitDockerfile(plan)
 	assertContains(t, out, "EXPOSE 8080")
 }
 
 // Edge cases --------------------------------------------------------------
 
 func TestEmitDockerfile_EmptyPlan_ReturnsEmpty(t *testing.T) {
-	plan := &BuildPlan{Framework: "go", Expose: 8080}
-	out := EmitDockerfile(plan)
+	plan := &docksmith.BuildPlan{Framework: "go", Expose: 8080}
+	out := docksmith.EmitDockerfile(plan)
 	if out != "" {
 		t.Errorf("expected empty string for empty plan, got:\n%s", out)
 	}
 }
 
 func TestEmitDockerfile_InjectionSafety_NewlineInArg(t *testing.T) {
-	plan := singleStepPlan(Step{
-		Type: StepRun,
+	plan := singleStepPlan(docksmith.Step{
+		Type: docksmith.StepRun,
 		Args: []string{"echo hello\nRUN rm -rf /"},
 	})
-	out := EmitDockerfile(plan)
+	out := docksmith.EmitDockerfile(plan)
 
-	// Injected newline must be scrubbed — no extra RUN directive after sanitization
 	lines := strings.Split(out, "\n")
 	runCount := 0
 	for _, l := range lines {
@@ -308,9 +293,8 @@ func TestEmitDockerfile_InjectionSafety_NewlineInArg(t *testing.T) {
 
 func TestEmitDockerfile_BlankLineBetweenStages(t *testing.T) {
 	plan := mustNodePlan(t)
-	out := EmitDockerfile(plan)
+	out := docksmith.EmitDockerfile(plan)
 
-	// Each FROM after the first must be preceded by a blank line.
 	lines := strings.Split(out, "\n")
 	fromCount := 0
 	for i, line := range lines {
@@ -328,8 +312,7 @@ func TestEmitDockerfile_BlankLineBetweenStages(t *testing.T) {
 
 func TestEmitDockerfile_SyntaxComment(t *testing.T) {
 	plan := mustNodePlan(t)
-	out := EmitDockerfile(plan)
-	// BuildKit syntax directive must appear at the top
+	out := docksmith.EmitDockerfile(plan)
 	assertContains(t, out, "# syntax=docker/dockerfile:1")
 }
 
@@ -342,19 +325,15 @@ func assertContains(t *testing.T, haystack, needle string) {
 	}
 }
 
-// singleStepPlan creates a minimal valid plan with a single stage containing
-// the given step. It uses "python:3.12-slim" as a base image so plan.Validate
-// doesn't complain (static framework is exempt from Expose). We bypass
-// Validate entirely here since EmitDockerfile is the unit under test.
-func singleStepPlan(step Step) *BuildPlan {
-	return &BuildPlan{
+func singleStepPlan(step docksmith.Step) *docksmith.BuildPlan {
+	return &docksmith.BuildPlan{
 		Framework: "go",
 		Expose:    8080,
-		Stages: []Stage{
+		Stages: []docksmith.Stage{
 			{
 				Name:  "runtime",
 				From:  fmt.Sprintf("golang:%s-alpine", "1.26"),
-				Steps: []Step{step},
+				Steps: []docksmith.Step{step},
 			},
 		},
 	}

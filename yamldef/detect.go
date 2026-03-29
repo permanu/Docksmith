@@ -67,7 +67,7 @@ func EvalRule(dir string, rule DetectRule) bool {
 		if err != nil {
 			return false
 		}
-		return fileMatchesRegex(p, rule.Regex)
+		return FileMatchesRegex(p, rule.Regex)
 	}
 	if rule.JSON != "" && rule.Path != "" {
 		p, err := ContainedPath(dir, rule.JSON)
@@ -119,7 +119,8 @@ const maxRegexPatternLen = 1024
 // fileMatchesRegex returns true when the file at path contains a match for the
 // compiled regular expression pattern. Rejects patterns longer than 1024 chars
 // to limit ReDoS risk from untrusted YAML definitions.
-func fileMatchesRegex(path, pattern string) bool {
+// FileMatchesRegex checks if the file at path matches the given regex pattern.
+func FileMatchesRegex(path, pattern string) bool {
 	if len(pattern) > maxRegexPatternLen {
 		return false
 	}

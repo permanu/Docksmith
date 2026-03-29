@@ -1,9 +1,11 @@
-package docksmith
+package detect_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/permanu/docksmith/detect"
 )
 
 func TestHasFile(t *testing.T) {
@@ -24,8 +26,8 @@ func TestHasFile(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := hasFile(tt.dir, tt.file); got != tt.want {
-				t.Errorf("hasFile(%q, %q) = %v, want %v", tt.dir, tt.file, got, tt.want)
+			if got := detect.HasFile(tt.dir, tt.file); got != tt.want {
+				t.Errorf("HasFile(%q, %q) = %v, want %v", tt.dir, tt.file, got, tt.want)
 			}
 		})
 	}
@@ -49,8 +51,8 @@ func TestFileExists(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := fileExists(tt.path); got != tt.want {
-				t.Errorf("fileExists(%q) = %v, want %v", tt.path, got, tt.want)
+			if got := detect.FileExists(tt.path); got != tt.want {
+				t.Errorf("FileExists(%q) = %v, want %v", tt.path, got, tt.want)
 			}
 		})
 	}
@@ -83,8 +85,8 @@ func TestFileContains(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := fileContains(tt.path, tt.substr); got != tt.want {
-				t.Errorf("fileContains(%q, %q) = %v, want %v", tt.path, tt.substr, got, tt.want)
+			if got := detect.FileContains(tt.path, tt.substr); got != tt.want {
+				t.Errorf("FileContains(%q, %q) = %v, want %v", tt.path, tt.substr, got, tt.want)
 			}
 		})
 	}
@@ -108,8 +110,8 @@ func TestParseVersionString(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
-			if got := parseVersionString(tt.in); got != tt.want {
-				t.Errorf("parseVersionString(%q) = %q, want %q", tt.in, got, tt.want)
+			if got := detect.ParseVersionString(tt.in); got != tt.want {
+				t.Errorf("ParseVersionString(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
 	}
@@ -130,8 +132,8 @@ func TestExtractMajorVersion(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
-			if got := extractMajorVersion(tt.in); got != tt.want {
-				t.Errorf("extractMajorVersion(%q) = %q, want %q", tt.in, got, tt.want)
+			if got := detect.ExtractMajorVersion(tt.in); got != tt.want {
+				t.Errorf("ExtractMajorVersion(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
 	}

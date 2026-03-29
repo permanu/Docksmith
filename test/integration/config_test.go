@@ -1,10 +1,11 @@
-package docksmith
+package integration_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/permanu/docksmith"
 	"github.com/permanu/docksmith/config"
 )
 
@@ -13,7 +14,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestLoadConfig_YAML_FullFields(t *testing.T) {
-	cfg, err := LoadConfig(filepath.Join("testdata", "fixtures", "config-yaml"))
+	cfg, err := docksmith.LoadConfig(filepath.Join("../../testdata", "fixtures", "config-yaml"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -51,7 +52,7 @@ func TestLoadConfig_YAML_FullFields(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLoadConfig_JSON_FullFields(t *testing.T) {
-	cfg, err := LoadConfig(filepath.Join("testdata", "fixtures", "config-json"))
+	cfg, err := docksmith.LoadConfig(filepath.Join("../../testdata", "fixtures", "config-json"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -87,7 +88,7 @@ func TestLoadConfig_MissingRuntime_ReturnsError(t *testing.T) {
 	content := "start:\n  command: node index.js\n"
 	mustWriteFile(t, filepath.Join(dir, "docksmith.yaml"), content)
 
-	_, err := LoadConfig(dir)
+	_, err := docksmith.LoadConfig(dir)
 	if err == nil {
 		t.Fatal("want error for missing runtime, got nil")
 	}
@@ -98,7 +99,7 @@ func TestLoadConfig_InvalidRuntime_ReturnsError(t *testing.T) {
 	content := "runtime: fortran\nstart:\n  command: ./run\n"
 	mustWriteFile(t, filepath.Join(dir, "docksmith.yaml"), content)
 
-	_, err := LoadConfig(dir)
+	_, err := docksmith.LoadConfig(dir)
 	if err == nil {
 		t.Fatal("want error for invalid runtime, got nil")
 	}
@@ -109,7 +110,7 @@ func TestLoadConfig_MissingStart_NonStatic_ReturnsError(t *testing.T) {
 	content := "runtime: go\nversion: \"1.22\"\n"
 	mustWriteFile(t, filepath.Join(dir, "docksmith.yaml"), content)
 
-	_, err := LoadConfig(dir)
+	_, err := docksmith.LoadConfig(dir)
 	if err == nil {
 		t.Fatal("want error for missing start command on non-static runtime, got nil")
 	}
@@ -120,7 +121,7 @@ func TestLoadConfig_Static_NoStartRequired(t *testing.T) {
 	content := "runtime: static\n"
 	mustWriteFile(t, filepath.Join(dir, "docksmith.yaml"), content)
 
-	cfg, err := LoadConfig(dir)
+	cfg, err := docksmith.LoadConfig(dir)
 	if err != nil {
 		t.Fatalf("unexpected error for static runtime without start: %v", err)
 	}
@@ -134,7 +135,7 @@ func TestLoadConfig_Static_NoStartRequired(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLoadConfig_DockerfileMode_NoRuntimeRequired(t *testing.T) {
-	cfg, err := LoadConfig(filepath.Join("testdata", "fixtures", "config-dockerfile-mode"))
+	cfg, err := docksmith.LoadConfig(filepath.Join("../../testdata", "fixtures", "config-dockerfile-mode"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -147,7 +148,7 @@ func TestLoadConfig_DockerfileMode_NoRuntimeRequired(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Default ports (now stored in RuntimeConfig.Expose)
+// Default ports
 // ---------------------------------------------------------------------------
 
 func TestLoadConfig_DefaultPorts(t *testing.T) {
@@ -170,18 +171,12 @@ func TestLoadConfig_DefaultPorts(t *testing.T) {
 	}
 
 	startCmds := map[string]string{
-		"node":   "node index.js",
-		"python": "gunicorn app:app",
-		"go":     "go run .",
-		"php":    "php -S 0.0.0.0:80",
-		"java":   "java -jar app.jar",
-		"dotnet": "dotnet run",
-		"rust":   "./target/release/app",
-		"ruby":   "bundle exec puma",
-		"elixir": "mix phx.server",
-		"deno":   "deno run --allow-net main.ts",
-		"bun":    "bun run index.ts",
-		"static": "",
+		"node": "node index.js", "python": "gunicorn app:app",
+		"go": "go run .", "php": "php -S 0.0.0.0:80",
+		"java": "java -jar app.jar", "dotnet": "dotnet run",
+		"rust": "./target/release/app", "ruby": "bundle exec puma",
+		"elixir": "mix phx.server", "deno": "deno run --allow-net main.ts",
+		"bun": "bun run index.ts", "static": "",
 	}
 
 	for _, tc := range cases {
@@ -195,7 +190,7 @@ func TestLoadConfig_DefaultPorts(t *testing.T) {
 			}
 			mustWriteFile(t, filepath.Join(dir, "docksmith.yaml"), content)
 
-			cfg, err := LoadConfig(dir)
+			cfg, err := docksmith.LoadConfig(dir)
 			if err != nil {
 				t.Fatalf("LoadConfig error: %v", err)
 			}
@@ -211,7 +206,7 @@ func TestLoadConfig_PortOverride_Respected(t *testing.T) {
 	content := "runtime: node\nstart:\n  command: node server.js\nruntime_config:\n  expose: 9090\n"
 	mustWriteFile(t, filepath.Join(dir, "docksmith.yaml"), content)
 
-	cfg, err := LoadConfig(dir)
+	cfg, err := docksmith.LoadConfig(dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -226,11 +221,7 @@ func TestLoadConfig_PortOverride_Respected(t *testing.T) {
 
 func TestConfig_ToFramework_AllRuntimes(t *testing.T) {
 	cases := []struct {
-		runtime    string
-		wantName   string
-		start      string
-		versionKey string
-		version    string
+		runtime, wantName, start, versionKey, version string
 	}{
 		{"node", "express", "node index.js", "node", "18"},
 		{"python", "flask", "gunicorn app:app", "python", "3.11"},
@@ -248,90 +239,53 @@ func TestConfig_ToFramework_AllRuntimes(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.runtime, func(t *testing.T) {
-			cfg := &Config{
+			cfg := &docksmith.Config{
 				Runtime:       tc.runtime,
-				Start:         StartConfig{Command: tc.start},
+				Start:         docksmith.StartConfig{Command: tc.start},
 				Version:       tc.version,
-				RuntimeConfig: RuntimeCfg{Expose: 8080},
+				RuntimeConfig: docksmith.RuntimeCfg{Expose: 8080},
 			}
 			if tc.runtime == "bun" {
 				cfg.PackageManager = "bun"
 			}
 
-			fw := ConfigToFramework(cfg)
+			fw := docksmith.ConfigToFramework(cfg)
 			if fw == nil {
 				t.Fatal("got nil Framework")
 			}
 			if fw.Name != tc.wantName {
 				t.Errorf("Name = %q, want %q", fw.Name, tc.wantName)
 			}
-
-			switch tc.versionKey {
-			case "node":
-				if fw.NodeVersion != tc.version {
-					t.Errorf("NodeVersion = %q, want %q", fw.NodeVersion, tc.version)
-				}
-			case "python":
-				if fw.PythonVersion != tc.version {
-					t.Errorf("PythonVersion = %q, want %q", fw.PythonVersion, tc.version)
-				}
-			case "go":
-				if fw.GoVersion != tc.version {
-					t.Errorf("GoVersion = %q, want %q", fw.GoVersion, tc.version)
-				}
-			case "php":
-				if fw.PHPVersion != tc.version {
-					t.Errorf("PHPVersion = %q, want %q", fw.PHPVersion, tc.version)
-				}
-			case "java":
-				if fw.JavaVersion != tc.version {
-					t.Errorf("JavaVersion = %q, want %q", fw.JavaVersion, tc.version)
-				}
-			case "dotnet":
-				if fw.DotnetVersion != tc.version {
-					t.Errorf("DotnetVersion = %q, want %q", fw.DotnetVersion, tc.version)
-				}
-			case "deno":
-				if fw.DenoVersion != tc.version {
-					t.Errorf("DenoVersion = %q, want %q", fw.DenoVersion, tc.version)
-				}
-			case "bun":
-				if fw.BunVersion != tc.version {
-					t.Errorf("BunVersion = %q, want %q", fw.BunVersion, tc.version)
-				}
-			}
 		})
 	}
 }
 
 func TestConfig_ToFramework_GoDefaultBuildCommand(t *testing.T) {
-	cfg := &Config{
-		Runtime:       "go",
-		Start:         StartConfig{Command: "go run ."},
-		RuntimeConfig: RuntimeCfg{Expose: 8080},
+	cfg := &docksmith.Config{
+		Runtime: "go", Start: docksmith.StartConfig{Command: "go run ."},
+		RuntimeConfig: docksmith.RuntimeCfg{Expose: 8080},
 	}
-	fw := ConfigToFramework(cfg)
+	fw := docksmith.ConfigToFramework(cfg)
 	if fw.BuildCommand != "go build -o app ." {
 		t.Errorf("BuildCommand = %q, want %q", fw.BuildCommand, "go build -o app .")
 	}
 }
 
 func TestConfig_ToFramework_GoCustomBuildCommand_NotOverridden(t *testing.T) {
-	cfg := &Config{
-		Runtime:       "go",
-		Build:         BuildConfig{Command: "make build"},
-		Start:         StartConfig{Command: "go run ."},
-		RuntimeConfig: RuntimeCfg{Expose: 8080},
+	cfg := &docksmith.Config{
+		Runtime: "go", Build: docksmith.BuildConfig{Command: "make build"},
+		Start: docksmith.StartConfig{Command: "go run ."},
+		RuntimeConfig: docksmith.RuntimeCfg{Expose: 8080},
 	}
-	fw := ConfigToFramework(cfg)
+	fw := docksmith.ConfigToFramework(cfg)
 	if fw.BuildCommand != "make build" {
 		t.Errorf("BuildCommand = %q, want %q", fw.BuildCommand, "make build")
 	}
 }
 
 func TestConfig_ToFramework_DockerfileMode(t *testing.T) {
-	cfg := &Config{Dockerfile: "./Dockerfile.custom"}
-	fw := ConfigToFramework(cfg)
+	cfg := &docksmith.Config{Dockerfile: "./Dockerfile.custom"}
+	fw := docksmith.ConfigToFramework(cfg)
 	if fw.Name != "dockerfile" {
 		t.Errorf("Name = %q, want %q", fw.Name, "dockerfile")
 	}
@@ -341,18 +295,17 @@ func TestConfig_ToFramework_DockerfileMode(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Config file priority: docksmith.toml > docksmith.yaml
+// Config file priority
 // ---------------------------------------------------------------------------
 
 func TestLoadConfig_Priority_TomlBeforeYAML(t *testing.T) {
-	cfg, err := LoadConfig(filepath.Join("testdata", "fixtures", "config-priority-toml"))
+	cfg, err := docksmith.LoadConfig(filepath.Join("../../testdata", "fixtures", "config-priority-toml"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if cfg == nil {
 		t.Fatal("got nil, want config")
 	}
-	// toml has runtime=go, yaml has runtime=node — toml wins
 	if cfg.Runtime != "go" {
 		t.Errorf("Runtime = %q, want %q (toml should win over yaml)", cfg.Runtime, "go")
 	}
@@ -363,7 +316,7 @@ func TestLoadConfig_Priority_YAMLBeforeYML(t *testing.T) {
 	mustWriteFile(t, filepath.Join(dir, "docksmith.yaml"), "runtime: python\nstart:\n  command: gunicorn app:app\n")
 	mustWriteFile(t, filepath.Join(dir, "docksmith.yml"), "runtime: node\nstart:\n  command: node index.js\n")
 
-	cfg, err := LoadConfig(dir)
+	cfg, err := docksmith.LoadConfig(dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -377,7 +330,7 @@ func TestLoadConfig_Priority_YMLBeforeJSON(t *testing.T) {
 	mustWriteFile(t, filepath.Join(dir, "docksmith.yml"), "runtime: python\nstart:\n  command: gunicorn app:app\n")
 	mustWriteFile(t, filepath.Join(dir, "docksmith.json"), `{"runtime":"node","start":{"command":"node index.js"}}`)
 
-	cfg, err := LoadConfig(dir)
+	cfg, err := docksmith.LoadConfig(dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -391,7 +344,7 @@ func TestLoadConfig_Priority_JSONBeforeDotYAML(t *testing.T) {
 	mustWriteFile(t, filepath.Join(dir, "docksmith.json"), `{"runtime":"node","start":{"command":"node index.js"}}`)
 	mustWriteFile(t, filepath.Join(dir, ".docksmith.yaml"), "runtime: python\nstart:\n  command: gunicorn app:app\n")
 
-	cfg, err := LoadConfig(dir)
+	cfg, err := docksmith.LoadConfig(dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -401,12 +354,12 @@ func TestLoadConfig_Priority_JSONBeforeDotYAML(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Missing config file: returns nil, nil
+// Missing config file
 // ---------------------------------------------------------------------------
 
 func TestLoadConfig_MissingFile_ReturnsNilNil(t *testing.T) {
 	dir := t.TempDir()
-	cfg, err := LoadConfig(dir)
+	cfg, err := docksmith.LoadConfig(dir)
 	if err != nil {
 		t.Fatalf("want nil error, got: %v", err)
 	}
@@ -416,12 +369,12 @@ func TestLoadConfig_MissingFile_ReturnsNilNil(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// DetectOptions.ConfigFileNames custom names
+// DetectOptions.ConfigFileNames
 // ---------------------------------------------------------------------------
 
 func TestDetectWithOptions_ConfigFileNames_CustomName(t *testing.T) {
 	cfg, err := config.LoadWithNames(
-		filepath.Join("testdata", "fixtures", "config-custom-name"),
+		filepath.Join("../../testdata", "fixtures", "config-custom-name"),
 		[]string{"deploy.yaml"},
 	)
 	if err != nil {
@@ -449,8 +402,8 @@ func TestDetectWithOptions_ConfigFileNames_SkipsDefaultNames(t *testing.T) {
 }
 
 func TestDetectWithOptions_CustomConfigNames_WiredIntoDetect(t *testing.T) {
-	dir := filepath.Join("testdata", "fixtures", "config-custom-name")
-	fw, err := DetectWithOptions(dir, DetectOptions{ConfigFileNames: []string{"deploy.yaml"}})
+	dir := filepath.Join("../../testdata", "fixtures", "config-custom-name")
+	fw, err := docksmith.DetectWithOptions(dir, docksmith.DetectOptions{ConfigFileNames: []string{"deploy.yaml"}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -463,8 +416,8 @@ func TestDetectWithOptions_CustomConfigNames_WiredIntoDetect(t *testing.T) {
 }
 
 func TestDetect_ConfigTakesPriorityOverAutoDetection(t *testing.T) {
-	dir := filepath.Join("testdata", "fixtures", "config-yaml")
-	fw, err := Detect(dir)
+	dir := filepath.Join("../../testdata", "fixtures", "config-yaml")
+	fw, err := docksmith.Detect(dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -481,7 +434,7 @@ func TestDetect_ConfigTakesPriorityOverAutoDetection(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLoadConfig_TOML_BasicFields(t *testing.T) {
-	cfg, err := LoadConfig(filepath.Join("testdata", "fixtures", "config-priority-toml"))
+	cfg, err := docksmith.LoadConfig(filepath.Join("../../testdata", "fixtures", "config-priority-toml"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

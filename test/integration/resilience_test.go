@@ -1,4 +1,4 @@
-package docksmith
+package integration_test
 
 import (
 	"errors"
@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/permanu/docksmith"
 	"github.com/permanu/docksmith/config"
+	"github.com/permanu/docksmith/yamldef"
 )
 
 func TestParseConfig_malformed(t *testing.T) {
@@ -91,7 +93,7 @@ func TestFrameworkFromJSON_malformed(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			fw, err := FrameworkFromJSON(tc.data)
+			fw, err := docksmith.FrameworkFromJSON(tc.data)
 			if tc.wantErr && err == nil {
 				t.Error("expected error")
 			}
@@ -104,35 +106,35 @@ func TestEvalDetectRules_adversarial(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "app.js"), []byte("console.log('hi')"), 0644)
 
-	manyRules := make([]DetectRule, 1000)
+	manyRules := make([]docksmith.DetectRule, 1000)
 	for i := range manyRules {
-		manyRules[i] = DetectRule{File: "app.js"}
+		manyRules[i] = docksmith.DetectRule{File: "app.js"}
 	}
 
 	cases := []struct {
-		name string
-		rules DetectRules
+		name  string
+		rules docksmith.DetectRules
 		want  bool
 	}{
-		{"empty rules", DetectRules{}, true},
-		{"1000 all rules", DetectRules{All: manyRules}, true},
-		{"empty file+dir rule", DetectRules{All: []DetectRule{{}}}, true},
-		{"redos pattern", DetectRules{All: []DetectRule{
+		{"empty rules", docksmith.DetectRules{}, true},
+		{"1000 all rules", docksmith.DetectRules{All: manyRules}, true},
+		{"empty file+dir rule", docksmith.DetectRules{All: []docksmith.DetectRule{{}}}, true},
+		{"redos pattern", docksmith.DetectRules{All: []docksmith.DetectRule{
 			{File: "app.js", Regex: `(a+)+$`},
 		}}, false},
-		{"long contains", DetectRules{All: []DetectRule{
+		{"long contains", docksmith.DetectRules{All: []docksmith.DetectRule{
 			{File: "app.js", Contains: strings.Repeat("z", 10000)},
 		}}, false},
-		{"file pointing to dir", DetectRules{All: []DetectRule{
+		{"file pointing to dir", docksmith.DetectRules{All: []docksmith.DetectRule{
 			{File: "."},
 		}}, true},
-		{"regex over max len", DetectRules{All: []DetectRule{
+		{"regex over max len", docksmith.DetectRules{All: []docksmith.DetectRule{
 			{File: "app.js", Regex: strings.Repeat("a", 2000)},
 		}}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := evalDetectRules(dir, tc.rules)
+			got := yamldef.EvalDetectRules(dir, tc.rules)
 			if got != tc.want {
 				t.Errorf("got %v, want %v", got, tc.want)
 			}
@@ -144,31 +146,23 @@ func TestEvalDetectRules_redosTimeout(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "evil.txt"), []byte(strings.Repeat("a", 50)+"b"), 0644)
 
-	rules := DetectRules{All: []DetectRule{
+	rules := docksmith.DetectRules{All: []docksmith.DetectRule{
 		{File: "evil.txt", Regex: `(a+)+$`},
 	}}
-
-	// Go's regexp is RE2-based, so this must not hang.
-	_ = evalDetectRules(dir, rules)
+	_ = yamldef.EvalDetectRules(dir, rules)
 }
 
 func TestLoadFrameworkDefs_adversarial(t *testing.T) {
 	dir := t.TempDir()
 
-	// valid yaml
 	os.WriteFile(filepath.Join(dir, "good.yaml"), []byte("name: testfw\nruntime: node\n"), 0644)
-	// binary with yaml extension
 	os.WriteFile(filepath.Join(dir, "bad.yaml"), []byte{0xff, 0xfe, 0x00}, 0644)
-	// yaml anchor cycle attempt
 	os.WriteFile(filepath.Join(dir, "cycle.yaml"), []byte("name: cyc\na: &a\n  b: *a\n"), 0644)
-	// huge yaml
 	os.WriteFile(filepath.Join(dir, "huge.yaml"), []byte("name: huge\ndata: "+strings.Repeat("x", 100_000)+"\n"), 0644)
-	// non-yaml extension
 	os.WriteFile(filepath.Join(dir, "skip.txt"), []byte("should be ignored"), 0644)
-	// missing name
 	os.WriteFile(filepath.Join(dir, "noname.yaml"), []byte("runtime: python\n"), 0644)
 
-	defs, err := LoadFrameworkDefs(dir)
+	defs, err := docksmith.LoadFrameworkDefs(dir)
 	if err == nil {
 		t.Error("expected partial error for bad files")
 	}
@@ -186,7 +180,7 @@ func TestLoadFrameworkDefs_adversarial(t *testing.T) {
 }
 
 func TestLoadFrameworkDefs_nonexistentDir(t *testing.T) {
-	_, err := LoadFrameworkDefs("/nonexistent/path/that/does/not/exist")
+	_, err := docksmith.LoadFrameworkDefs("/nonexistent/path/that/does/not/exist")
 	if err == nil {
 		t.Error("expected error for nonexistent dir")
 	}
@@ -194,49 +188,48 @@ func TestLoadFrameworkDefs_nonexistentDir(t *testing.T) {
 
 func TestBuildPlan_adversarial(t *testing.T) {
 	t.Run("zero stages validates error", func(t *testing.T) {
-		plan := &BuildPlan{Framework: "test", Stages: nil, Expose: 3000}
-		if err := plan.Validate(); err == nil {
+		p := &docksmith.BuildPlan{Framework: "test", Stages: nil, Expose: 3000}
+		if err := p.Validate(); err == nil {
 			t.Error("expected error for 0 stages")
 		}
 	})
 
 	t.Run("100 stages", func(t *testing.T) {
-		stages := make([]Stage, 100)
+		stages := make([]docksmith.Stage, 100)
 		for i := range stages {
-			stages[i] = Stage{
-				Name:  "",
+			stages[i] = docksmith.Stage{
 				From:  "node:20",
-				Steps: []Step{{Type: StepRun, Args: []string{"echo hi"}}},
+				Steps: []docksmith.Step{{Type: docksmith.StepRun, Args: []string{"echo hi"}}},
 			}
 		}
-		plan := &BuildPlan{Framework: "test", Stages: stages, Expose: 3000}
-		if err := plan.Validate(); err != nil {
+		p := &docksmith.BuildPlan{Framework: "test", Stages: stages, Expose: 3000}
+		if err := p.Validate(); err != nil {
 			t.Errorf("100 stages should be fine: %v", err)
 		}
 	})
 
 	t.Run("stage with 0 steps", func(t *testing.T) {
-		plan := &BuildPlan{
+		p := &docksmith.BuildPlan{
 			Framework: "test",
-			Stages:    []Stage{{Name: "empty", From: "node:20", Steps: nil}},
+			Stages:    []docksmith.Stage{{Name: "empty", From: "node:20", Steps: nil}},
 			Expose:    3000,
 		}
-		if err := plan.Validate(); err == nil {
+		if err := p.Validate(); err == nil {
 			t.Error("expected error for empty stage")
 		}
 	})
 
 	t.Run("unknown from reference", func(t *testing.T) {
-		plan := &BuildPlan{
+		p := &docksmith.BuildPlan{
 			Framework: "test",
-			Stages: []Stage{{
+			Stages: []docksmith.Stage{{
 				Name:  "run",
 				From:  "nonexistent",
-				Steps: []Step{{Type: StepRun, Args: []string{"echo"}}},
+				Steps: []docksmith.Step{{Type: docksmith.StepRun, Args: []string{"echo"}}},
 			}},
 			Expose: 3000,
 		}
-		if err := plan.Validate(); err == nil {
+		if err := p.Validate(); err == nil {
 			t.Error("expected error for unknown from")
 		}
 	})
@@ -244,36 +237,35 @@ func TestBuildPlan_adversarial(t *testing.T) {
 
 func TestEmitDockerfile_edgeCases(t *testing.T) {
 	t.Run("empty plan", func(t *testing.T) {
-		plan := &BuildPlan{Stages: nil}
-		out := EmitDockerfile(plan)
+		p := &docksmith.BuildPlan{Stages: nil}
+		out := docksmith.EmitDockerfile(p)
 		if out != "" {
 			t.Error("expected empty output for empty plan")
 		}
 	})
 
 	t.Run("nil steps in stage", func(t *testing.T) {
-		plan := &BuildPlan{
-			Stages: []Stage{{Name: "base", From: "alpine:3", Steps: nil}},
+		p := &docksmith.BuildPlan{
+			Stages: []docksmith.Stage{{Name: "base", From: "alpine:3", Steps: nil}},
 			Expose: 8080,
 		}
-		out := EmitDockerfile(plan)
+		out := docksmith.EmitDockerfile(p)
 		if !strings.Contains(out, "FROM") {
 			t.Error("should still emit FROM")
 		}
 	})
 
 	t.Run("nil copy_from pointer handled", func(t *testing.T) {
-		plan := &BuildPlan{
-			Stages: []Stage{{
+		p := &docksmith.BuildPlan{
+			Stages: []docksmith.Stage{{
 				Name: "base",
 				From: "alpine:3",
-				Steps: []Step{
-					{Type: StepCopyFrom, CopyFrom: nil},
+				Steps: []docksmith.Step{
+					{Type: docksmith.StepCopyFrom, CopyFrom: nil},
 				},
 			}},
 		}
-		// Should not panic — nil CopyFrom is silently skipped.
-		out := EmitDockerfile(plan)
+		out := docksmith.EmitDockerfile(p)
 		if !strings.Contains(out, "FROM") {
 			t.Error("should still emit FROM")
 		}
@@ -285,21 +277,20 @@ func TestEmitDockerfile_edgeCases(t *testing.T) {
 				t.Errorf("panicked on nil args: %v", r)
 			}
 		}()
-		plan := &BuildPlan{
-			Stages: []Stage{{
+		p := &docksmith.BuildPlan{
+			Stages: []docksmith.Stage{{
 				Name:  "base",
 				From:  "alpine:3",
-				Steps: []Step{{Type: StepEnv, Args: nil}},
+				Steps: []docksmith.Step{{Type: docksmith.StepEnv, Args: nil}},
 			}},
 		}
-		_ = EmitDockerfile(plan)
+		_ = docksmith.EmitDockerfile(p)
 	})
 }
 
 func TestDetect_emptyAndBrokenDirs(t *testing.T) {
 	t.Run("nonexistent dir", func(t *testing.T) {
-		fw, err := Detect("/nonexistent/dir/xyz")
-		// should not panic; returns static fallback or error
+		fw, err := docksmith.Detect("/nonexistent/dir/xyz")
 		_ = fw
 		_ = err
 	})
@@ -308,18 +299,18 @@ func TestDetect_emptyAndBrokenDirs(t *testing.T) {
 		f, _ := os.CreateTemp("", "docksmith-test-*")
 		f.Close()
 		defer os.Remove(f.Name())
-		fw, err := Detect(f.Name())
+		fw, err := docksmith.Detect(f.Name())
 		_ = fw
 		_ = err
 	})
 
 	t.Run("empty dir returns ErrNotDetected", func(t *testing.T) {
 		dir := t.TempDir()
-		_, err := Detect(dir)
+		_, err := docksmith.Detect(dir)
 		if err == nil {
 			t.Fatal("expected error for empty dir")
 		}
-		if !errors.Is(err, ErrNotDetected) {
+		if !errors.Is(err, docksmith.ErrNotDetected) {
 			t.Errorf("error = %v, want ErrNotDetected", err)
 		}
 	})
@@ -329,7 +320,7 @@ func TestDetect_emptyAndBrokenDirs(t *testing.T) {
 		sub := filepath.Join(dir, "noperm")
 		os.Mkdir(sub, 0000)
 		defer os.Chmod(sub, 0755)
-		fw, err := Detect(sub)
+		fw, err := docksmith.Detect(sub)
 		_ = fw
 		_ = err
 	})
@@ -337,33 +328,32 @@ func TestDetect_emptyAndBrokenDirs(t *testing.T) {
 
 func TestBuildPlanFromDef_nilAndEmpty(t *testing.T) {
 	t.Run("nil def", func(t *testing.T) {
-		_, err := buildPlanFromDef(nil, t.TempDir())
+		_, err := docksmith.BuildPlanFromDefDir(nil, t.TempDir())
 		if err == nil {
 			t.Error("expected error for nil def")
 		}
 	})
 
 	t.Run("def with no stages", func(t *testing.T) {
-		def := &FrameworkDef{Name: "empty", Runtime: "node"}
-		plan, err := buildPlanFromDef(def, t.TempDir())
-		if err != nil && plan != nil {
-			// either error or empty plan is acceptable
-			if len(plan.Stages) != 0 {
+		def := &docksmith.FrameworkDef{Name: "empty", Runtime: "node"}
+		p, err := docksmith.BuildPlanFromDefDir(def, t.TempDir())
+		if err != nil && p != nil {
+			if len(p.Stages) != 0 {
 				t.Error("expected 0 stages")
 			}
 		}
 	})
 
 	t.Run("stage with no base or from", func(t *testing.T) {
-		def := &FrameworkDef{
+		def := &docksmith.FrameworkDef{
 			Name:    "broken",
 			Runtime: "node",
-			Plan: PlanDef{
+			Plan: docksmith.PlanDef{
 				Port:   3000,
-				Stages: []StageDef{{Name: "oops", Steps: []StepDef{{Run: "echo"}}}},
+				Stages: []docksmith.StageDef{{Name: "oops", Steps: []docksmith.StepDef{{Run: "echo"}}}},
 			},
 		}
-		_, err := buildPlanFromDef(def, t.TempDir())
+		_, err := docksmith.BuildPlanFromDefDir(def, t.TempDir())
 		if err == nil {
 			t.Error("expected error for stage with no base/from")
 		}

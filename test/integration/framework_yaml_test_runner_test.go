@@ -1,4 +1,4 @@
-package docksmith_test
+package integration_test
 
 import (
 	"path/filepath"
@@ -14,7 +14,7 @@ func frameworksDir(t *testing.T) string {
 	if !ok {
 		t.Fatal("runtime.Caller failed")
 	}
-	return filepath.Join(filepath.Dir(file), "frameworks")
+	return filepath.Join(filepath.Dir(file), "..", "..", "frameworks")
 }
 
 func TestRunFrameworkTests_nextjs(t *testing.T) {

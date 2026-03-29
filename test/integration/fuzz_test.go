@@ -1,10 +1,13 @@
-package docksmith
+package integration_test
 
 import (
 	"strings"
 	"testing"
 
+	"github.com/permanu/docksmith"
 	"github.com/permanu/docksmith/config"
+	"github.com/permanu/docksmith/detect"
+	"github.com/permanu/docksmith/emit"
 	"github.com/permanu/docksmith/plan"
 )
 
@@ -13,7 +16,7 @@ func FuzzSanitizeDockerfileArg(f *testing.F) {
 	f.Add("hello\nworld")
 	f.Add("")
 	f.Fuzz(func(t *testing.T, s string) {
-		out := sanitizeDockerfileArg(s)
+		out := emit.SanitizeDockerfileArg(s)
 		if strings.ContainsAny(out, "\n\r\x00") {
 			t.Fatalf("output contains forbidden char: %q", out)
 		}
@@ -46,7 +49,7 @@ func FuzzParseVersionString(f *testing.F) {
 	f.Add("")
 	f.Add("v20.1.0")
 	f.Fuzz(func(t *testing.T, s string) {
-		_ = parseVersionString(s)
+		_ = detect.ParseVersionString(s)
 	})
 }
 
@@ -66,7 +69,7 @@ func FuzzFrameworkFromJSON(f *testing.F) {
 	f.Add([]byte(`{}`))
 	f.Add([]byte{})
 	f.Fuzz(func(t *testing.T, data []byte) {
-		_, _ = FrameworkFromJSON(data)
+		_, _ = docksmith.FrameworkFromJSON(data)
 	})
 }
 
@@ -75,21 +78,21 @@ func FuzzEmitDockerfile(f *testing.F) {
 	f.Add("build", "go build -o app .", "./app")
 	f.Add("", "", "")
 	f.Fuzz(func(t *testing.T, stageName, buildCmd, startCmd string) {
-		plan := &BuildPlan{
+		p := &docksmith.BuildPlan{
 			Framework: "fuzz",
 			Expose:    8080,
-			Stages: []Stage{{
+			Stages: []docksmith.Stage{{
 				Name: stageName,
 				From: "alpine:3.19",
-				Steps: []Step{
-					{Type: StepWorkdir, Args: []string{"/app"}},
-					{Type: StepRun, Args: []string{buildCmd}},
-					{Type: StepCmd, Args: []string{startCmd}},
-					{Type: StepEnv, Args: []string{"KEY", buildCmd}},
-					{Type: StepExpose, Args: []string{"8080"}},
+				Steps: []docksmith.Step{
+					{Type: docksmith.StepWorkdir, Args: []string{"/app"}},
+					{Type: docksmith.StepRun, Args: []string{buildCmd}},
+					{Type: docksmith.StepCmd, Args: []string{startCmd}},
+					{Type: docksmith.StepEnv, Args: []string{"KEY", buildCmd}},
+					{Type: docksmith.StepExpose, Args: []string{"8080"}},
 				},
 			}},
 		}
-		_ = EmitDockerfile(plan)
+		_ = docksmith.EmitDockerfile(p)
 	})
 }

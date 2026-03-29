@@ -1,13 +1,15 @@
-package docksmith
+package integration_test
 
 import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/permanu/docksmith"
 )
 
-func goFrameworkForOverride() *Framework {
-	return &Framework{
+func goFrameworkForOverride() *docksmith.Framework {
+	return &docksmith.Framework{
 		Name:         "go-gin",
 		GoVersion:    "1.22",
 		Port:         8080,
@@ -17,13 +19,13 @@ func goFrameworkForOverride() *Framework {
 }
 
 func TestPlanWithUserOverride_AddsUserStep(t *testing.T) {
-	plan, err := Plan(goFrameworkForOverride(), WithUser("nonroot"))
+	plan, err := docksmith.Plan(goFrameworkForOverride(), docksmith.WithUser("nonroot"))
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
 	runtime := plan.Stages[len(plan.Stages)-1]
 	for _, step := range runtime.Steps {
-		if step.Type == StepUser && len(step.Args) > 0 && step.Args[0] == "nonroot" {
+		if step.Type == docksmith.StepUser && len(step.Args) > 0 && step.Args[0] == "nonroot" {
 			return
 		}
 	}
@@ -31,26 +33,26 @@ func TestPlanWithUserOverride_AddsUserStep(t *testing.T) {
 }
 
 func TestPlanWithUserOverride_EmptyString_RemovesExistingUser(t *testing.T) {
-	plan, err := Plan(goFrameworkForOverride(), WithUser(""))
+	plan, err := docksmith.Plan(goFrameworkForOverride(), docksmith.WithUser(""))
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
 	runtime := plan.Stages[len(plan.Stages)-1]
 	for _, step := range runtime.Steps {
-		if step.Type == StepUser {
+		if step.Type == docksmith.StepUser {
 			t.Errorf("WithUser(\"\") should remove USER step, found args=%v", step.Args)
 		}
 	}
 }
 
 func TestPlanWithHealthcheckDisabled_RemovesHealthcheck(t *testing.T) {
-	plan, err := Plan(goFrameworkForOverride(), WithHealthcheckDisabled())
+	plan, err := docksmith.Plan(goFrameworkForOverride(), docksmith.WithHealthcheckDisabled())
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
 	for _, stage := range plan.Stages {
 		for _, step := range stage.Steps {
-			if step.Type == StepHealthcheck {
+			if step.Type == docksmith.StepHealthcheck {
 				t.Error("healthcheck should be removed when disabled")
 			}
 		}
@@ -58,13 +60,13 @@ func TestPlanWithHealthcheckDisabled_RemovesHealthcheck(t *testing.T) {
 }
 
 func TestPlanWithHealthcheck_AddsStep(t *testing.T) {
-	plan, err := Plan(goFrameworkForOverride(), WithHealthcheck("curl -f http://localhost:8080/health"))
+	plan, err := docksmith.Plan(goFrameworkForOverride(), docksmith.WithHealthcheck("curl -f http://localhost:8080/health"))
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
 	runtime := plan.Stages[len(plan.Stages)-1]
 	for _, step := range runtime.Steps {
-		if step.Type == StepHealthcheck {
+		if step.Type == docksmith.StepHealthcheck {
 			return
 		}
 	}
@@ -72,7 +74,7 @@ func TestPlanWithHealthcheck_AddsStep(t *testing.T) {
 }
 
 func TestPlanWithExposeOverride_ChangesPort(t *testing.T) {
-	plan, err := Plan(goFrameworkForOverride(), WithExpose(9000))
+	plan, err := docksmith.Plan(goFrameworkForOverride(), docksmith.WithExpose(9000))
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
@@ -81,7 +83,7 @@ func TestPlanWithExposeOverride_ChangesPort(t *testing.T) {
 	}
 	runtime := plan.Stages[len(plan.Stages)-1]
 	for _, step := range runtime.Steps {
-		if step.Type == StepExpose {
+		if step.Type == docksmith.StepExpose {
 			if len(step.Args) == 0 || step.Args[0] != "9000" {
 				t.Errorf("EXPOSE step args = %v, want [9000]", step.Args)
 			}
@@ -92,7 +94,7 @@ func TestPlanWithExposeOverride_ChangesPort(t *testing.T) {
 }
 
 func TestPlanWithRuntimeImage_OverridesBaseImage(t *testing.T) {
-	plan, err := Plan(goFrameworkForOverride(), WithRuntimeImage("gcr.io/distroless/static:nonroot"))
+	plan, err := docksmith.Plan(goFrameworkForOverride(), docksmith.WithRuntimeImage("gcr.io/distroless/static:nonroot"))
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
@@ -103,7 +105,7 @@ func TestPlanWithRuntimeImage_OverridesBaseImage(t *testing.T) {
 }
 
 func TestPlanWithExtraEnv_AddsEnvSteps(t *testing.T) {
-	plan, err := Plan(goFrameworkForOverride(), WithExtraEnv(map[string]string{
+	plan, err := docksmith.Plan(goFrameworkForOverride(), docksmith.WithExtraEnv(map[string]string{
 		"PORT": "8080",
 		"ENV":  "production",
 	}))
@@ -113,7 +115,7 @@ func TestPlanWithExtraEnv_AddsEnvSteps(t *testing.T) {
 	runtime := plan.Stages[len(plan.Stages)-1]
 	envKeys := map[string]bool{}
 	for _, step := range runtime.Steps {
-		if step.Type == StepEnv && len(step.Args) == 2 {
+		if step.Type == docksmith.StepEnv && len(step.Args) == 2 {
 			envKeys[step.Args[0]] = true
 		}
 	}
@@ -123,13 +125,13 @@ func TestPlanWithExtraEnv_AddsEnvSteps(t *testing.T) {
 }
 
 func TestPlanWithEntrypoint_ReplacesCmd(t *testing.T) {
-	plan, err := Plan(goFrameworkForOverride(), WithEntrypoint("/bin/sh", "-c", "./server"))
+	plan, err := docksmith.Plan(goFrameworkForOverride(), docksmith.WithEntrypoint("/bin/sh", "-c", "./server"))
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
 	runtime := plan.Stages[len(plan.Stages)-1]
 	for _, step := range runtime.Steps {
-		if step.Type == StepEntrypoint {
+		if step.Type == docksmith.StepEntrypoint {
 			return
 		}
 	}
@@ -138,11 +140,11 @@ func TestPlanWithEntrypoint_ReplacesCmd(t *testing.T) {
 
 func TestPlanWithNoOptions_SameAsBefore(t *testing.T) {
 	fw := goFrameworkForOverride()
-	planWithout, err := Plan(fw)
+	planWithout, err := docksmith.Plan(fw)
 	if err != nil {
 		t.Fatalf("Plan without opts: %v", err)
 	}
-	planWith, err := Plan(fw)
+	planWith, err := docksmith.Plan(fw)
 	if err != nil {
 		t.Fatalf("Plan with empty opts: %v", err)
 	}
@@ -153,7 +155,7 @@ func TestPlanWithNoOptions_SameAsBefore(t *testing.T) {
 
 func TestGenerateDockerfileWithOptions_ExposeOverride(t *testing.T) {
 	fw := goFrameworkForOverride()
-	dockerfile, err := GenerateDockerfile(fw, WithExpose(9090))
+	dockerfile, err := docksmith.GenerateDockerfile(fw, docksmith.WithExpose(9090))
 	if err != nil {
 		t.Fatalf("GenerateDockerfile: %v", err)
 	}
@@ -167,7 +169,7 @@ func TestBuildWithOptions_PassesPlanOptions(t *testing.T) {
 	mustWriteFile(t, dir+"/docksmith.yaml", "runtime: go\nversion: \"1.22\"\nstart:\n  command: ./server\n")
 	mustWriteFile(t, dir+"/go.mod", fmt.Sprintf("module testapp\n\ngo 1.22\n"))
 
-	dockerfile, _, err := Build(dir, WithExpose(7777))
+	dockerfile, _, err := docksmith.Build(dir, docksmith.WithExpose(7777))
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
