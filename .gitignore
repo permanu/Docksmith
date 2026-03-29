@@ -27,7 +27,7 @@ Thumbs.db
 # Build
 dist/
 bin/
-docksmith
+/docksmith
 cover.out
 cover.html
 cpu.prof
