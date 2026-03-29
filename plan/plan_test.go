@@ -165,9 +165,11 @@ func TestBuildPlanSecretMountRoundTrip(t *testing.T) {
 					{
 						Type: core.StepRun,
 						Args: []string{"pip install -r requirements.txt"},
-						SecretMount: &core.SecretMount{
-							ID:     "pip-conf",
-							Target: "/root/.pip/pip.conf",
+						SecretMounts: []core.SecretMount{
+							{
+								ID:     "pip-conf",
+								Target: "/root/.pip/pip.conf",
+							},
 						},
 					},
 				},
@@ -183,11 +185,11 @@ func TestBuildPlanSecretMountRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	sm := got.Stages[0].Steps[0].SecretMount
-	if sm == nil {
-		t.Fatal("expected secret_mount after round-trip, got nil")
+	sms := got.Stages[0].Steps[0].SecretMounts
+	if len(sms) == 0 {
+		t.Fatal("expected secret_mounts after round-trip, got empty")
 	}
-	if sm.ID != "pip-conf" {
-		t.Errorf("secret mount id: got %q, want %q", sm.ID, "pip-conf")
+	if sms[0].ID != "pip-conf" {
+		t.Errorf("secret mount id: got %q, want %q", sms[0].ID, "pip-conf")
 	}
 }

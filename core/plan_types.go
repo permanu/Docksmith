@@ -40,13 +40,13 @@ type Stage struct {
 
 // Step is one build instruction within a stage.
 type Step struct {
-	Type        StepType     `json:"type"`
-	Args        []string     `json:"args,omitempty"`
-	CacheMount  *CacheMount  `json:"cache_mount,omitempty"`
-	SecretMount *SecretMount `json:"secret_mount,omitempty"`
-	CopyFrom    *CopyFrom    `json:"copy_from,omitempty"`
-	Link        bool         `json:"link,omitempty"`
-	ShellForm   bool         `json:"shell_form,omitempty"` // emit CMD/ENTRYPOINT as shell-form (supports env-var expansion)
+	Type         StepType      `json:"type"`
+	Args         []string      `json:"args,omitempty"`
+	CacheMount   *CacheMount   `json:"cache_mount,omitempty"`
+	SecretMounts []SecretMount `json:"secret_mounts,omitempty"`
+	CopyFrom     *CopyFrom     `json:"copy_from,omitempty"`
+	Link         bool          `json:"link,omitempty"`
+	ShellForm    bool          `json:"shell_form,omitempty"` // emit CMD/ENTRYPOINT as shell-form (supports env-var expansion)
 }
 
 // CacheMount describes a BuildKit cache mount for a RUN step.
@@ -55,9 +55,12 @@ type CacheMount struct {
 }
 
 // SecretMount describes a BuildKit secret mount for a RUN step.
+// At least one of Target or Env must be set. When Target is set, the secret
+// is mounted as a file. When Env is set, it is injected as an environment variable.
 type SecretMount struct {
 	ID     string `json:"id"`
-	Target string `json:"target"`
+	Target string `json:"target,omitempty"`
+	Env    string `json:"env,omitempty"`
 }
 
 // CopyFrom copies a path from a named prior stage.

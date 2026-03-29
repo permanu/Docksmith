@@ -212,7 +212,7 @@ func TestEmitDockerfile_StepRun_SecretMount(t *testing.T) {
 	plan := singleStepPlan(docksmith.Step{
 		Type:        docksmith.StepRun,
 		Args:        []string{"pip install -r requirements.txt"},
-		SecretMount: &docksmith.SecretMount{ID: "pip-conf", Target: "/root/.pip/pip.conf"},
+		SecretMounts: []docksmith.SecretMount{{ID: "pip-conf", Target: "/root/.pip/pip.conf"}},
 	})
 	out := docksmith.EmitDockerfile(plan)
 	assertContains(t, out, "--mount=type=secret,id=pip-conf,target=/root/.pip/pip.conf")

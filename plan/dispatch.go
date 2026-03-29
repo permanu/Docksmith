@@ -211,6 +211,46 @@ func applyPlanOverrides(plan *core.BuildPlan, cfg *planConfig) {
 			last.Steps = append(last.Steps, core.Step{Type: core.StepEnv, Args: []string{k, cfg.ExtraEnv[k]}})
 		}
 	}
+
+	if len(cfg.Secrets) > 0 {
+		applySecrets(plan, cfg.Secrets)
+	}
+}
+
+// applySecrets attaches secret mounts to RUN steps in install/build stages.
+// Config secrets merge with any pre-existing secret mounts; config wins on ID collision.
+func applySecrets(plan *core.BuildPlan, secrets []core.SecretMount) {
+	for i := range plan.Stages {
+		stage := &plan.Stages[i]
+		// Skip the final runtime stage — secrets belong on install/build RUN steps.
+		if i == len(plan.Stages)-1 && len(plan.Stages) > 1 {
+			continue
+		}
+		for j := range stage.Steps {
+			if stage.Steps[j].Type != core.StepRun {
+				continue
+			}
+			stage.Steps[j].SecretMounts = mergeSecrets(stage.Steps[j].SecretMounts, secrets)
+		}
+	}
+}
+
+func mergeSecrets(existing, incoming []core.SecretMount) []core.SecretMount {
+	seen := make(map[string]int, len(existing))
+	merged := make([]core.SecretMount, len(existing))
+	copy(merged, existing)
+	for i, sm := range merged {
+		seen[sm.ID] = i
+	}
+	for _, sm := range incoming {
+		if idx, ok := seen[sm.ID]; ok {
+			merged[idx] = sm
+		} else {
+			seen[sm.ID] = len(merged)
+			merged = append(merged, sm)
+		}
+	}
+	return merged
 }
 
 // findStageByName returns a pointer to the named stage, or nil.
