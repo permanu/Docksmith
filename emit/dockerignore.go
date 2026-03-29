@@ -17,6 +17,13 @@ var baseIgnorePatterns = []string{
 	"Dockerfile",
 	".dockerignore",
 	"docker-compose*.yml",
+	".npmrc",
+	".netrc",
+	"pip.conf",
+	"settings.xml",
+	".bundle/config",
+	"*.pem",
+	"*.key",
 }
 
 // GenerateDockerignore returns .dockerignore file content tailored to the framework.
