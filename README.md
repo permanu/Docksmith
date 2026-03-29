@@ -265,18 +265,37 @@ Also reads `docksmith.yaml` and `docksmith.json`. Run `docksmith init` to genera
 
 ## Custom framework definitions
 
-Add detection for any framework with a YAML file in `~/.docksmith/frameworks/` or `.docksmith/frameworks/` in your project:
+Add detection for any framework with a YAML file in `~/.docksmith/frameworks/` or `.docksmith/frameworks/` in your project.
+
+The simplest possible definition — just detection, no custom build plan:
 
 ```yaml
 name: my-framework
 runtime: node
-priority: 10
-
 detect:
   all:
     - dependency: my-framework
-  any:
-    - file: my-framework.config.js
+```
+
+That's it. Docksmith uses the standard Node build plan (deps → build → runtime) with sensible defaults. The `dependency` rule checks package.json automatically — you don't specify which manifest file.
+
+For full control over the Dockerfile, add a plan with stages. Every field below is optional except `name`, `runtime`, and `detect`:
+
+```yaml
+name: my-framework
+runtime: node
+
+# Detection priority — higher wins when multiple definitions match.
+# Convention: 1-5 generic runtimes, 10-20 specific frameworks, 50+ niche variants.
+priority: 10
+
+detect:
+  all:                                # ALL must match (AND):
+    - dependency: my-framework        #   package.json lists "my-framework"
+  any:                                # AND at least ONE of these (OR):
+    - file: my-framework.config.js    #   JS config exists
+    - file: my-framework.config.ts    #   or TS config exists
+  # none:                             # NONE may match (NOT) — useful for exclusions
 
 defaults:
   build: "npm run build"
@@ -286,12 +305,12 @@ plan:
   port: 3000
   stages:
     - name: builder
-      base: node
+      base: node                      # resolved to "node:22-alpine" via ResolveDockerTag
       steps:
         - workdir: /app
         - copy: ["package*.json", "."]
-        - run: "{{install_command}}"
-          cache: /root/.npm
+        - run: "{{install_command}}"   # template vars expanded from defaults + detection
+          cache: /root/.npm            # BuildKit cache mount for this RUN step
         - copy: [".", "."]
         - run: "{{build_command}}"
     - name: runtime
@@ -304,6 +323,7 @@ plan:
             dst: .
         - cmd: ["node", "server.js"]
 
+# Inline tests — run with: docksmith test my-framework.yaml
 tests:
   - name: detects my-framework
     fixture:
@@ -313,7 +333,9 @@ tests:
       framework: my-framework
 ```
 
-YAML definitions include inline tests. Run them with `docksmith test my-framework.yaml`. The community registry (`docksmith registry search`) provides additional definitions.
+Stages map 1:1 to Dockerfile stages — if you can read a multi-stage Dockerfile, you can read this. Template variables (`{{build_command}}`, `{{install_command}}`, `{{port}}`) are expanded from the `defaults` block and detection results.
+
+The community registry (`docksmith registry search`) provides additional definitions you can install with `docksmith registry install`.
 
 ## Development
 
