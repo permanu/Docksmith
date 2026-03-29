@@ -97,6 +97,7 @@ var (
 // ---------------------------------------------------------------------------
 
 var FrameworkFromJSON = core.FrameworkFromJSON
+var ValidateContextRoot = config.ValidateContextRoot
 
 // Plan option constructors
 var (
@@ -114,6 +115,7 @@ var (
 	WithSystemDeps          = plan.WithSystemDeps
 	WithBuildCacheDisabled  = plan.WithBuildCacheDisabled
 	WithSecrets            = plan.WithSecrets
+	WithContextRoot        = plan.WithContextRoot
 )
 
 var ResolveDockerTag = plan.ResolveDockerTag
@@ -293,6 +295,10 @@ func ConfigToPlanOptions(c *Config) ([]PlanOption, error) {
 
 	if len(c.Secrets) > 0 {
 		opts = append(opts, WithSecrets(configSecretsToMounts(c.Secrets)))
+	}
+
+	if c.ContextRoot != "" {
+		opts = append(opts, WithContextRoot(c.ContextRoot))
 	}
 
 	return opts, nil

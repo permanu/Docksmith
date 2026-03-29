@@ -19,6 +19,7 @@ type PlanConfig struct {
 	SystemDeps   []string
 	NoBuildCache bool
 	Secrets      []core.SecretMount
+	ContextRoot  *string
 }
 
 // planConfig is an internal alias kept for transition clarity.
@@ -90,6 +91,10 @@ func WithBuildCacheDisabled() PlanOption {
 
 func WithSecrets(secrets []core.SecretMount) PlanOption {
 	return planOptionFunc(func(c *planConfig) { c.Secrets = secrets })
+}
+
+func WithContextRoot(appSubdir string) PlanOption {
+	return planOptionFunc(func(c *planConfig) { c.ContextRoot = &appSubdir })
 }
 
 // ResolvePlanConfig resolves a slice of PlanOption into a PlanConfig.

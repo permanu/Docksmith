@@ -19,6 +19,7 @@ type Config struct {
 	Version        string            `toml:"version"          yaml:"version"          json:"version,omitempty"`
 	PackageManager string            `toml:"package_manager"  yaml:"package_manager"  json:"package_manager,omitempty"`
 	Dockerfile     string            `toml:"dockerfile"       yaml:"dockerfile"       json:"dockerfile,omitempty"`
+	ContextRoot    string            `toml:"context_root"     yaml:"context_root"     json:"context_root,omitempty"`
 	Env            map[string]string `toml:"env"              yaml:"env"              json:"env,omitempty"`
 	Build          BuildConfig       `toml:"build"            yaml:"build"            json:"build,omitempty"`
 	Start          StartConfig       `toml:"start"            yaml:"start"            json:"start,omitempty"`
@@ -172,6 +173,7 @@ type rawConfig struct {
 	Version        string            `toml:"version"         yaml:"version"         json:"version,omitempty"`
 	PackageManager string            `toml:"package_manager" yaml:"package_manager" json:"package_manager,omitempty"`
 	Dockerfile     string            `toml:"dockerfile"      yaml:"dockerfile"      json:"dockerfile,omitempty"`
+	ContextRoot    string            `toml:"context_root"    yaml:"context_root"    json:"context_root,omitempty"`
 	Env            map[string]string `toml:"env"             yaml:"env"             json:"env,omitempty"`
 	Build          BuildConfig       `toml:"build"           yaml:"build"           json:"build,omitempty"`
 	Start          StartConfig       `toml:"start"           yaml:"start"           json:"start,omitempty"`
@@ -216,6 +218,7 @@ func ParseConfig(name string, data []byte) (*Config, error) {
 		Version:        raw.Version,
 		PackageManager: raw.PackageManager,
 		Dockerfile:     raw.Dockerfile,
+		ContextRoot:    raw.ContextRoot,
 		Env:            raw.Env,
 		Build:          raw.Build,
 		Start:          raw.Start,
@@ -255,6 +258,51 @@ func (c *Config) validateSecrets() error {
 		}
 	}
 	return nil
+}
+
+// ValidateContextRoot checks that contextRoot is an ancestor of appDir and
+// contains no path traversal. Both paths must be absolute. Returns the
+// app-relative subdirectory within the context root (e.g. "apps/frontend").
+func ValidateContextRoot(contextRoot, appDir string) (string, error) {
+	if contextRoot == "" {
+		return "", nil
+	}
+
+	absRoot, err := filepath.Abs(contextRoot)
+	if err != nil {
+		return "", fmt.Errorf("resolve context root: %w", err)
+	}
+	absApp, err := filepath.Abs(appDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve app dir: %w", err)
+	}
+
+	// Reject .. components in the raw paths before resolution.
+	if containsDotDot(contextRoot) || containsDotDot(appDir) {
+		return "", fmt.Errorf("path traversal in context root or app dir")
+	}
+
+	rel, err := filepath.Rel(absRoot, absApp)
+	if err != nil {
+		return "", fmt.Errorf("compute relative path: %w", err)
+	}
+	if strings.HasPrefix(rel, "..") {
+		return "", fmt.Errorf("context root %q is not an ancestor of app dir %q", contextRoot, appDir)
+	}
+	// "." means they're the same directory — no monorepo offset needed.
+	if rel == "." {
+		return "", nil
+	}
+	return filepath.ToSlash(rel), nil
+}
+
+func containsDotDot(path string) bool {
+	for _, part := range strings.Split(filepath.ToSlash(path), "/") {
+		if part == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Config) applyDefaults() {

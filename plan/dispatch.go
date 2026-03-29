@@ -55,7 +55,11 @@ func Plan(fw *core.Framework, opts ...PlanOption) (*core.BuildPlan, error) {
 		return nil, err
 	}
 	if len(opts) > 0 {
-		applyPlanOverrides(plan, ResolvePlanConfig(opts))
+		cfg := ResolvePlanConfig(opts)
+		applyPlanOverrides(plan, cfg)
+		if cfg.ContextRoot != nil {
+			applyContextRoot(plan, *cfg.ContextRoot)
+		}
 	}
 	return plan, nil
 }
