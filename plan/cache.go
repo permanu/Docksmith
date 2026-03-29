@@ -16,7 +16,8 @@ func CacheDir(appID string) string {
 	return filepath.Join("/var/cache/buildkit", SanitizeAppID(appID))
 }
 
-// SanitizeAppID makes an app ID safe for use in file paths.
+// SanitizeAppID strips path traversal sequences and shell-unsafe characters from an app ID.
+// Returns "unknown" for empty or fully-stripped inputs.
 func SanitizeAppID(appID string) string {
 	if appIDSafe.MatchString(appID) {
 		return appID

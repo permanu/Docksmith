@@ -44,6 +44,8 @@ func pmLockfileArgs(pm string) []string {
 	}
 }
 
+// planNode builds a three-stage plan (deps -> build -> runtime).
+// Static frameworks (vite, CRA, etc.) get nginx; server frameworks run the node process.
 func planNode(fw *core.Framework) (*core.BuildPlan, error) {
 	pm := fw.PackageManager
 	if pm == "" {

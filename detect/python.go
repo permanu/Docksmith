@@ -9,6 +9,7 @@ import (
 	"strings"
 )
 
+// Python packages that need OS-level libraries to compile from source.
 var pythonSystemDepsMap = map[string][]string{
 	"psycopg2":        {"libpq-dev"},
 	"psycopg2-binary": {},

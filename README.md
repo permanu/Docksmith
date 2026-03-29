@@ -135,38 +135,19 @@ Every generated Dockerfile gets these by default:
 - **Distroless runtime** -- Go and Rust containers use `gcr.io/distroless/static` for the runtime stage. No shell, no package manager, minimal attack surface.
 - **Health checks** -- auto-injected per runtime. Node uses stdlib `http.get`, Python uses `urllib`, Java uses `wget`. Go distroless containers do not get a health check (no shell to run it in).
 
-## Comparison
+## How docksmith compares
 
-| | Docksmith | Railpack | Nixpacks | Cloud Native Buildpacks |
-|---|---|---|---|---|
-| **Approach** | Generates Dockerfiles | Builds OCI images via BuildKit LLB | Generates Dockerfiles | Builds OCI images |
-| **Written in** | Go | Go | Rust | Go/Java |
-| **Output** | Readable, committable Dockerfile | OCI image (no intermediate Dockerfile) | Dockerfile | Opaque OCI layers |
-| **Use as library** | Yes (Go API) | Go API + CLI | CLI only | CLI + pack API |
-| **Languages** | 12 runtimes, 45 framework detectors | 11 language providers | 23 language providers | 9 language families (Paketo) |
-| **Multi-stage builds** | Always | BuildKit layers (implicit) | Partial | No |
-| **Non-root user** | Always | Depends on provider | Sometimes | Sometimes |
-| **Health checks** | Auto-injected per runtime | No | No | No |
-| **Tini init** | Node, Python | No | No | No |
-| **Distroless** | Go, Rust | No | No | No |
-| **Monorepo support** | Yes (`--root` flag separates context from app dir) | Yes (workspace detection) | Limited | Varies |
-| **Buildtime secrets** | Yes (BuildKit `--mount=type=secret`) | Yes (BuildKit secrets) | No | Varies |
-| **Runtime mgmt** | Alpine apk | Mise | Nix | Buildpack-provided |
-| **Custom frameworks** | YAML definitions + Go API | Provider plugins (Go) | Nix expressions | Buildpacks (complex) |
-| **Status** | Internal testing at Permanu | Powers all Railway deployments | Maintenance mode | Mature, wide adoption |
-| **License** | Apache 2.0 | MIT | MIT | Apache 2.0 |
+There are good tools in this space. Here's why I built another one.
 
-### Comparison notes
+**Railpack** powers all Railway deployments and produces smaller images than docksmith does — Railway reports 38% smaller Node and 77% smaller Python images vs Nixpacks. It builds OCI images directly via BuildKit LLB, which means parallel layer execution and graph-level optimization that a flat Dockerfile can't match. If you're on Railway, just use Railpack. If you're building your own platform and want to hand users a Dockerfile they can read, modify, and commit — that's where docksmith fits.
 
-**Railpack** — Railway's successor to Nixpacks (January 2025). Builds OCI images directly via BuildKit LLB using Mise for runtime management. Supports monorepos, BuildKit secrets, and SPA frameworks. Railway reports 38% smaller Node and 77% smaller Python images vs Nixpacks.
-- *Stronger than Docksmith*: proven at Railway's scale, smaller images (graph-based parallel BuildKit execution), SPA-specific optimizations (asset hashing, CDN headers, fallback routing)
-- *Docksmith differs*: readable/committable Dockerfile output, embeddable Go library, hardening defaults (tini, distroless, health checks), community YAML framework registry
+**Nixpacks** is in maintenance mode (Railway recommends Railpack), but it covers 23 language providers including Crystal, Haskell, Dart, and Zig. Docksmith doesn't support those. If you need one of those runtimes, Nixpacks is still the answer.
 
-**Nixpacks** — Maintenance mode. Railway recommends Railpack. Widest language coverage (23 providers including Crystal, Haskell, Dart, Zig, and others docksmith does not support).
+**Cloud Native Buildpacks** (Paketo) is the most mature option — CNCF project, used by Heroku and Google Cloud. The tradeoff is opacity: you get OCI layers, not a Dockerfile. You can't read, tweak, or commit what it produces. For teams that want full control over their container definition, that's a dealbreaker.
 
-**Cloud Native Buildpacks / Paketo** — Most mature option. CNCF project. Used by Heroku, Google Cloud, and Spring Boot. Tradeoff: opaque OCI layers — you cannot inspect or modify the generated layers the way you can with a Dockerfile.
+**Docksmith** generates plain Dockerfiles. That's the whole point. You get a readable file with multi-stage builds, non-root users, tini, distroless bases, health checks, and cache mounts — things most teams know they should add but skip because it's tedious. The output has no runtime dependency on docksmith. Commit it, forget docksmith exists, and your Dockerfile still works.
 
-**Docksmith** — Choose when you want readable Dockerfiles, a Go library to embed in your own platform, or hardening defaults without manual work. Supports monorepos (`--root`), BuildKit secret mounts for private registries, and a community YAML framework registry. Does not build images itself — generates Dockerfiles and hands off to Docker/BuildKit.
+The library angle matters too: docksmith is a Go library first, CLI second. If you're building a PaaS, a deploy tool, or a CI pipeline that needs framework detection or Dockerfile generation, you can `import "github.com/permanu/docksmith"` and call three functions. Railpack and Nixpacks can do this too, but Buildpacks are harder to embed.
 
 ## Supported frameworks
 

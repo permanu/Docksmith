@@ -5,6 +5,13 @@ import (
 	"fmt"
 )
 
+// ResolveDockerTag maps a runtime name and optional version to a Docker image reference.
+// An empty version picks a sensible default (e.g. "22" for node, "3.12" for python).
+// Unknown runtimes pass through as-is: ResolveDockerTag("custom", "1.0") returns "custom:1.0".
+//
+//	ResolveDockerTag("node", "20")    => "node:20-alpine"
+//	ResolveDockerTag("python", "")    => "python:3.12-slim"
+//	ResolveDockerTag("bun", "1")      => "oven/bun:1"
 func ResolveDockerTag(runtime, version string) string {
 	switch runtime {
 	case "node":

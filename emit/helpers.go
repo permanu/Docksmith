@@ -14,7 +14,7 @@ func SanitizeDockerfileArg(s string) string {
 	return s
 }
 
-// ShellSplit quotes each word of cmd and joins with ", " for use inside a CMD array literal.
+// ShellSplit quotes each word for CMD array elements: "npm start" => "npm", "start".
 func ShellSplit(cmd string) string {
 	parts := strings.Fields(cmd)
 	quoted := make([]string, len(parts))
@@ -24,7 +24,7 @@ func ShellSplit(cmd string) string {
 	return strings.Join(quoted, ", ")
 }
 
-// JSONArray converts cmd into a JSON array string suitable for Dockerfile CMD.
+// JSONArray converts a command to Dockerfile exec form: "npm start" => ["npm", "start"].
 func JSONArray(cmd string) string {
 	parts := strings.Fields(cmd)
 	quoted := make([]string, len(parts))

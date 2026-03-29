@@ -185,7 +185,7 @@ func Detect(dir string) (*Framework, error) {
 	return detect.Detect(dir)
 }
 
-// DetectWithOptions runs detection with custom options.
+// DetectWithOptions runs detection with alternate config sources or auto-fetch behavior.
 func DetectWithOptions(dir string, opts DetectOptions) (*Framework, error) {
 	return detect.DetectWithOptions(dir, opts)
 }

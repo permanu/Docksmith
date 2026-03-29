@@ -34,6 +34,7 @@ type planOptionFunc func(*planConfig)
 
 func (f planOptionFunc) apply(c *planConfig) { f(c) }
 
+// WithUser sets the USER directive. Empty string removes USER entirely (container runs as root).
 func WithUser(user string) PlanOption {
 	return planOptionFunc(func(c *planConfig) { c.User = &user })
 }
@@ -42,15 +43,18 @@ func WithHealthcheck(cmd string) PlanOption {
 	return planOptionFunc(func(c *planConfig) { c.Healthcheck = &cmd })
 }
 
+// WithHealthcheckDisabled emits HEALTHCHECK NONE, suppressing the default curl/wget check.
 func WithHealthcheckDisabled() PlanOption {
 	empty := ""
 	return planOptionFunc(func(c *planConfig) { c.Healthcheck = &empty })
 }
 
+// WithRuntimeImage overrides the final stage's FROM (where the app runs).
 func WithRuntimeImage(image string) PlanOption {
 	return planOptionFunc(func(c *planConfig) { c.RuntimeImage = &image })
 }
 
+// WithBaseImage overrides the build stage's FROM (where deps are installed and code compiles).
 func WithBaseImage(image string) PlanOption {
 	return planOptionFunc(func(c *planConfig) { c.BaseImage = &image })
 }

@@ -1,7 +1,8 @@
 package plan
 
-// FrameworkDefaults returns sensible build and start commands for a framework.
-// Returns empty strings for unknown frameworks.
+// FrameworkDefaults returns fallback build and start commands for a framework name.
+// Used by the CLI for display hints and by config merging when the user omits commands.
+// Returns ("", "") for unrecognized names — callers should check both values.
 func FrameworkDefaults(name string) (buildCmd, startCmd string) {
 	switch name {
 	case "nextjs", "next":
