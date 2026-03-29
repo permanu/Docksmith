@@ -125,7 +125,7 @@ func InstallFramework(entry Entry) (string, error) {
 		return "", fmt.Errorf("install: invalid framework name %q", entry.Name)
 	}
 
-	destDir, err := userFrameworksDir()
+	destDir, err := UserFrameworksDir()
 	if err != nil {
 		return "", fmt.Errorf("install %s: %w", safeName, err)
 	}
@@ -236,7 +236,8 @@ func registryCachePath(registryURL string) (string, error) {
 	return filepath.Join(home, ".docksmith", "cache", name), nil
 }
 
-func userFrameworksDir() (string, error) {
+// UserFrameworksDir returns ~/.docksmith/frameworks/.
+func UserFrameworksDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err

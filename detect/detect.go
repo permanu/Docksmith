@@ -53,6 +53,14 @@ type NamedDetector struct {
 type DetectOptions struct {
 	// ConfigFileNames lists filenames to treat as user config (e.g. "docksmith.toml").
 	ConfigFileNames []string
+	// AutoFetch is called when all detectors fail to match. The callback
+	// should search the community registry, install a matching framework def,
+	// and return the re-detected Framework. Return (nil, nil) to fall through
+	// to static/error handling. Wired by the root package to avoid import cycles.
+	AutoFetch func(dir string) (*core.Framework, error)
+	// Hint, when set, receives a message suggesting a registry search when
+	// detection fails and AutoFetch is nil.
+	Hint func(msg string)
 }
 
 // detectors is the ordered registry. Individual runtime detectors
@@ -89,9 +97,22 @@ func DetectWithOptions(dir string, opts DetectOptions) (*core.Framework, error) 
 		}
 	}
 
-	// Only fall back to static if the directory has actual web-servable content.
-	// An empty dir or dir with only non-web files should error, not silently
-	// deploy nothing behind nginx.
+	// Try the community registry before giving up.
+	if opts.AutoFetch != nil {
+		if fw, err := opts.AutoFetch(dir); err != nil {
+			return nil, err
+		} else if fw != nil {
+			return fw, nil
+		}
+	}
+
+	if opts.AutoFetch == nil && opts.Hint != nil {
+		q := SearchQueryFromDir(dir)
+		if q != "" {
+			opts.Hint(fmt.Sprintf("Unknown project. Run `docksmith registry search %s` to find community definitions.", q))
+		}
+	}
+
 	if hasServableContent(dir) {
 		return &core.Framework{Name: "static", Port: 80, OutputDir: "."}, nil
 	}
