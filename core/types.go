@@ -16,13 +16,13 @@ type Framework struct {
 	BuildCommand   string   `json:"build_command"`
 	StartCommand   string   `json:"start_command"`
 	Port           int      `json:"port"`
-	OutputDir      string   `json:"output_dir,omitempty"`      // static asset dir (e.g. "dist", ".next"); empty for server frameworks
+	OutputDir      string   `json:"output_dir,omitempty"` // static asset dir (e.g. "dist", ".next"); empty for server frameworks
 	NodeVersion    string   `json:"node_version,omitempty"`
 	PackageManager string   `json:"package_manager,omitempty"` // npm, pnpm, yarn, bun — drives install commands and lockfile selection
 	PythonVersion  string   `json:"python_version,omitempty"`
-	PythonPM       string   `json:"python_pm,omitempty"`       // pip, poetry, uv, pdm, pipenv — distinct from PackageManager (JS-only)
+	PythonPM       string   `json:"python_pm,omitempty"` // pip, poetry, uv, pdm, pipenv — distinct from PackageManager (JS-only)
 	GoVersion      string   `json:"go_version,omitempty"`
-	SystemDeps     []string `json:"system_deps,omitempty"`     // OS packages needed at build time (e.g. libpq-dev for psycopg2)
+	SystemDeps     []string `json:"system_deps,omitempty"` // OS packages needed at build time (e.g. libpq-dev for psycopg2)
 	PHPVersion     string   `json:"php_version,omitempty"`
 	DotnetVersion  string   `json:"dotnet_version,omitempty"`
 	JavaVersion    string   `json:"java_version,omitempty"`

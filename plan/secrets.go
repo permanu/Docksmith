@@ -2,6 +2,7 @@ package plan
 
 import (
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"strings"
 
@@ -37,9 +38,12 @@ func ApplySecretMounts(plan *core.BuildPlan, dir string) []detect.SecretDef {
 
 	for _, s := range secrets {
 		if err := validateSecretTarget(s.Target); err != nil {
+			slog.Warn("skipping secret with invalid target", "secret_id", s.ID, "target", s.Target, "error", err)
 			continue
 		}
-		attachSecretToInstallStep(plan, core.SecretMount{ID: s.ID, Target: s.Target})
+		if !attachSecretToInstallStep(plan, core.SecretMount{ID: s.ID, Target: s.Target}) {
+			slog.Warn("no install step found for secret mount", "secret_id", s.ID)
+		}
 	}
 	return secrets
 }
@@ -47,7 +51,7 @@ func ApplySecretMounts(plan *core.BuildPlan, dir string) []detect.SecretDef {
 // attachSecretToInstallStep finds the first RUN step that looks like a
 // dependency install command and attaches the secret mount to it.
 // Searches the first stage (deps/builder) which is where install runs.
-func attachSecretToInstallStep(plan *core.BuildPlan, mount core.SecretMount) {
+func attachSecretToInstallStep(plan *core.BuildPlan, mount core.SecretMount) bool {
 	first := &plan.Stages[0]
 	for i := range first.Steps {
 		step := &first.Steps[i]
@@ -56,9 +60,10 @@ func attachSecretToInstallStep(plan *core.BuildPlan, mount core.SecretMount) {
 		}
 		if looksLikeInstall(strings.Join(step.Args, " ")) {
 			step.SecretMounts = append(step.SecretMounts, mount)
-			return
+			return true
 		}
 	}
+	return false
 }
 
 // looksLikeInstall returns true if cmd appears to be a dependency install command.

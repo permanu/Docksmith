@@ -20,11 +20,11 @@ func FrameworkDefaults(name string) (buildCmd, startCmd string) {
 	case "express", "fastify", "nestjs":
 		return "npm run build", "node dist/main.js"
 	case "django":
-		return "pip install -r requirements.txt", "gunicorn config.wsgi:application --bind 0.0.0.0:8000"
+		return "pip install -r requirements.txt", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --threads 2"
 	case "fastapi":
-		return "pip install -r requirements.txt", "uvicorn main:app --host 0.0.0.0 --port 8000"
+		return "pip install -r requirements.txt", "gunicorn main:app --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} -k uvicorn.workers.UvicornWorker"
 	case "flask":
-		return "pip install -r requirements.txt", "gunicorn app:app --bind 0.0.0.0:5000"
+		return "pip install -r requirements.txt", "gunicorn app:app --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --threads 2"
 	case "go", "go-gin", "go-echo", "go-fiber", "go-chi", "go-std":
 		return "go build -o server .", "./server"
 	case "spring-boot", "maven":

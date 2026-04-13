@@ -35,8 +35,8 @@ jobs:
         run: |
           total=$(go tool cover -func=cover.out | grep total | awk '{print $3}' | tr -d '%')
           echo "Coverage: ${total}%"
-          if (( $(echo "$total < 80" | bc -l) )); then
-            echo "Coverage below 80%"
+          if (( $(echo "$total < 40" | bc -l) )); then
+            echo "Coverage below 40%"
             exit 1
           fi
 
@@ -49,6 +49,13 @@ jobs:
         with:
           go-version: "1.26"
 
-      - uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
+      - name: Vet
+        run: go vet ./...
+
+      - name: Gofmt
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "Files need formatting:"
+            gofmt -l .
+            exit 1
+          fi

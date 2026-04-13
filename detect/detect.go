@@ -7,8 +7,8 @@ package detect
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -36,8 +36,7 @@ func hasServableContent(dir string) bool {
 		if e.IsDir() {
 			continue
 		}
-		ext := strings.ToLower(filepath.Ext(e.Name()))
-		if staticFileExtensions[ext] {
+		if strings.EqualFold(e.Name(), "index.html") {
 			return true
 		}
 	}
@@ -102,6 +101,7 @@ func DetectWithOptions(dir string, opts DetectOptions) (*core.Framework, error) 
 
 	for _, nd := range snapshot {
 		if fw := nd.Detect(dir); fw != nil {
+			slog.Debug("framework detected", "detector", nd.Name, "framework", fw.Name)
 			return fw, nil
 		}
 	}

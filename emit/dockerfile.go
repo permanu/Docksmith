@@ -5,8 +5,10 @@ package emit
 
 import (
 	"fmt"
-	"github.com/permanu/docksmith/core"
+	"log/slog"
 	"strings"
+
+	"github.com/permanu/docksmith/core"
 )
 
 // EmitDockerfile serializes a BuildPlan into a Dockerfile string.
@@ -14,6 +16,7 @@ import (
 // Returns an empty string when the plan has no stages.
 func EmitDockerfile(plan *core.BuildPlan) string {
 	if len(plan.Stages) == 0 {
+		slog.Warn("EmitDockerfile called with empty build plan")
 		return ""
 	}
 

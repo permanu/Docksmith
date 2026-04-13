@@ -36,7 +36,7 @@ func TestResolveDockerTag(t *testing.T) {
 		{"dotnet-runtime", "", "mcr.microsoft.com/dotnet/runtime:8.0"},
 		{"rust", "1.85", "rust:1.85-alpine"},
 		{"rust", "", "rust:1.85-alpine"},
-		{"deno", "", "denoland/deno:latest"},
+		{"deno", "", "denoland/deno:2.1.4"},
 		{"bun", "1", "oven/bun:1"},
 		{"bun", "", "oven/bun:1"},
 		{"elixir", "1.16", "elixir:1.16-alpine"},

@@ -145,7 +145,11 @@ func GenerateDockerfile(fw *Framework, opts ...PlanOption) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("generate dockerfile: %w", err)
 	}
-	return EmitDockerfile(p), nil
+	df := EmitDockerfile(p)
+	if df == "" {
+		return "", fmt.Errorf("generate dockerfile: build plan produced no stages")
+	}
+	return df, nil
 }
 
 // Build runs the full pipeline for dir: detect -> plan -> emit.
@@ -170,6 +174,9 @@ func BuildWithOptions(dir string, detectOpts DetectOptions, planOpts ...PlanOpti
 	}
 	secrets := ApplySecretMounts(p, dir)
 	df := EmitDockerfile(p)
+	if df == "" {
+		return "", fw, fmt.Errorf("build: plan produced no stages for framework %s", fw.Name)
+	}
 	if hint := SecretBuildHint(secrets); hint != "" {
 		df = hint + df
 	}

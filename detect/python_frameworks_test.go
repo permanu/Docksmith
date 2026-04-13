@@ -20,7 +20,7 @@ func TestDetectFastAPI_RequirementsTxt(t *testing.T) {
 	if fw.Port != 8000 {
 		t.Errorf("Port = %d, want 8000", fw.Port)
 	}
-	if fw.StartCommand != "uvicorn main:app --host 0.0.0.0 --port 8000" {
+	if fw.StartCommand != "gunicorn main:app --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} -k uvicorn.workers.UvicornWorker" {
 		t.Errorf("StartCommand = %q", fw.StartCommand)
 	}
 	if fw.PythonVersion == "" {
@@ -84,10 +84,10 @@ func TestDetectFlask_RequirementsTxt(t *testing.T) {
 	if fw.Name != "flask" {
 		t.Errorf("Name = %q, want %q", fw.Name, "flask")
 	}
-	if fw.Port != 5000 {
-		t.Errorf("Port = %d, want 5000", fw.Port)
+	if fw.Port != 8000 {
+		t.Errorf("Port = %d, want 8000", fw.Port)
 	}
-	if fw.StartCommand != "gunicorn --bind 0.0.0.0:5000 app:app" {
+	if fw.StartCommand != "gunicorn app:app --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --threads 2" {
 		t.Errorf("StartCommand = %q", fw.StartCommand)
 	}
 }
@@ -159,6 +159,68 @@ func TestDetect_FlaskViaFixture(t *testing.T) {
 	}
 	if fw.Name != "flask" {
 		t.Errorf("Name = %q, want %q", fw.Name, "flask")
+	}
+}
+
+func TestDetectPythonAppTarget_FastAPI(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "server.py", "from fastapi import FastAPI\n\napi = FastAPI(title=\"MyApp\")\n")
+	target := detectPythonAppTarget(dir, "FastAPI(")
+	if target != "server:api" {
+		t.Errorf("got %q, want %q", target, "server:api")
+	}
+}
+
+func TestDetectPythonAppTarget_Flask(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "application.py", "from flask import Flask\n\napp = Flask(__name__)\n")
+	target := detectPythonAppTarget(dir, "Flask(")
+	if target != "application:app" {
+		t.Errorf("got %q, want %q", target, "application:app")
+	}
+}
+
+func TestDetectPythonAppTarget_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "utils.py", "import os\n")
+	target := detectPythonAppTarget(dir, "FastAPI(")
+	if target != "" {
+		t.Errorf("got %q, want empty string", target)
+	}
+}
+
+func TestDetectPythonAppTarget_SkipsSubdirs(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "nested/main.py", "app = FastAPI()\n")
+	target := detectPythonAppTarget(dir, "FastAPI(")
+	if target != "" {
+		t.Errorf("got %q, want empty (should not scan subdirs)", target)
+	}
+}
+
+func TestDetectFastAPI_InfersAppTarget(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "requirements.txt", "fastapi>=0.100\nuvicorn\n")
+	writeFile(t, dir, "server.py", "from fastapi import FastAPI\napi = FastAPI()\n")
+	fw := detectFastAPI(dir)
+	if fw == nil {
+		t.Fatal("got nil, want framework")
+	}
+	if !contains(fw.StartCommand, "server:api") {
+		t.Errorf("StartCommand should use detected target, got %q", fw.StartCommand)
+	}
+}
+
+func TestDetectFlask_InfersAppTarget(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "requirements.txt", "flask==3.0\n")
+	writeFile(t, dir, "wsgi.py", "from myapp import create_app\napp = Flask(__name__)\n")
+	fw := detectFlask(dir)
+	if fw == nil {
+		t.Fatal("got nil, want framework")
+	}
+	if !contains(fw.StartCommand, "wsgi:app") {
+		t.Errorf("StartCommand should use detected target, got %q", fw.StartCommand)
 	}
 }
 
