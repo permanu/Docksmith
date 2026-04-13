@@ -60,9 +60,9 @@ func detectDjangoStartCommand(dir string) string {
 		}
 	}
 	if wsgi := detectDjangoWSGIModule(dir); wsgi != "" {
-		return "gunicorn --bind 0.0.0.0:${PORT:-8000} " + wsgi
+		return "gunicorn --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --threads 2 " + wsgi
 	}
-	return "gunicorn --bind 0.0.0.0:${PORT:-8000} config.wsgi:application"
+	return "gunicorn --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --threads 2 config.wsgi:application"
 }
 
 // detectDjangoWSGIModule scans one level deep for wsgi.py and returns the dotted
@@ -100,10 +100,14 @@ func detectFastAPI(dir string) *core.Framework {
 		return nil
 	}
 	pm := detectPythonPM(dir)
+	appTarget := detectPythonAppTarget(dir, "FastAPI(")
+	if appTarget == "" {
+		appTarget = "main:app"
+	}
 	return &core.Framework{
 		Name:          "fastapi",
 		BuildCommand:  pythonInstallCmd(pm),
-		StartCommand:  "uvicorn main:app --host 0.0.0.0 --port 8000",
+		StartCommand:  "gunicorn " + appTarget + " --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} -k uvicorn.workers.UvicornWorker",
 		Port:          8000,
 		PythonVersion: detectPythonVersion(dir),
 		PythonPM:      pm,
@@ -119,13 +123,56 @@ func detectFlask(dir string) *core.Framework {
 		return nil
 	}
 	pm := detectPythonPM(dir)
+	appTarget := detectPythonAppTarget(dir, "Flask(")
+	if appTarget == "" {
+		appTarget = "app:app"
+	}
 	return &core.Framework{
 		Name:          "flask",
 		BuildCommand:  pythonInstallCmd(pm),
-		StartCommand:  "gunicorn --bind 0.0.0.0:5000 app:app",
-		Port:          5000,
+		StartCommand:  "gunicorn " + appTarget + " --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --threads 2",
+		Port:          8000,
 		PythonVersion: detectPythonVersion(dir),
 		PythonPM:      pm,
 		SystemDeps:    detectPythonSystemDeps(dir),
 	}
+}
+
+// detectPythonAppTarget scans top-level .py files for a pattern like
+// `app = FastAPI(` or `application = Flask(` and returns the gunicorn target
+// in "module:variable" format (e.g. "main:app", "server:application").
+// Returns "" if nothing found — callers provide the fallback.
+func detectPythonAppTarget(dir string, constructorPattern string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".py") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			trimmed := strings.TrimSpace(line)
+			if !strings.Contains(trimmed, constructorPattern) {
+				continue
+			}
+			// Match patterns: "app = FastAPI(", "application = Flask("
+			eqIdx := strings.Index(trimmed, "=")
+			if eqIdx == -1 {
+				continue
+			}
+			varName := strings.TrimSpace(trimmed[:eqIdx])
+			// Skip invalid variable names (multi-word, dotted, etc.)
+			if strings.ContainsAny(varName, " .\t") {
+				continue
+			}
+			module := strings.TrimSuffix(e.Name(), ".py")
+			return module + ":" + varName
+		}
+	}
+	return ""
 }

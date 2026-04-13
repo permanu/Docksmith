@@ -11,6 +11,8 @@ func SanitizeDockerfileArg(s string) string {
 	s = strings.ReplaceAll(s, "\x00", "")
 	s = strings.ReplaceAll(s, "\n", " ")
 	s = strings.ReplaceAll(s, "\r", " ")
+	s = strings.ReplaceAll(s, "`", "")
+	s = strings.ReplaceAll(s, "$(", "")
 	return s
 }
 

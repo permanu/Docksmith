@@ -1,6 +1,10 @@
 package plan
 
-import "github.com/permanu/docksmith/core"
+import (
+	"strings"
+
+	"github.com/permanu/docksmith/core"
+)
 
 // PlanConfig holds user-specified overrides for Plan().
 // A nil pointer means "not set — use default". A non-nil pointer (even &"")
@@ -51,12 +55,29 @@ func WithHealthcheckDisabled() PlanOption {
 
 // WithRuntimeImage overrides the final stage's FROM (where the app runs).
 func WithRuntimeImage(image string) PlanOption {
-	return planOptionFunc(func(c *planConfig) { c.RuntimeImage = &image })
+	return planOptionFunc(func(c *planConfig) {
+		if isValidImageRef(image) {
+			c.RuntimeImage = &image
+		}
+	})
 }
 
 // WithBaseImage overrides the build stage's FROM (where deps are installed and code compiles).
 func WithBaseImage(image string) PlanOption {
-	return planOptionFunc(func(c *planConfig) { c.BaseImage = &image })
+	return planOptionFunc(func(c *planConfig) {
+		if isValidImageRef(image) {
+			c.BaseImage = &image
+		}
+	})
+}
+
+func isValidImageRef(s string) bool {
+	for _, bad := range []string{"&&", "||", "|", ";", "`", "$("} {
+		if strings.Contains(s, bad) {
+			return false
+		}
+	}
+	return s != ""
 }
 
 func WithEntrypoint(args ...string) PlanOption {

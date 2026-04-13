@@ -33,7 +33,7 @@ func TestPlan_AllFrameworks(t *testing.T) {
 		{name: "deno-oak", fw: core.Framework{Name: "deno-oak", Port: 8000, StartCommand: "deno run --allow-net main.ts"}},
 		{name: "django", fw: core.Framework{Name: "django", Port: 8000, StartCommand: "gunicorn config.wsgi:application"}},
 		{name: "fastapi", fw: core.Framework{Name: "fastapi", Port: 8000, StartCommand: "uvicorn main:app --host 0.0.0.0 --port 8000"}},
-		{name: "flask", fw: core.Framework{Name: "flask", Port: 5000, StartCommand: "gunicorn app:app"}},
+		{name: "flask", fw: core.Framework{Name: "flask", Port: 8000, StartCommand: "gunicorn app:app"}},
 		{name: "go", fw: core.Framework{Name: "go", Port: 8080, BuildCommand: "go build -o server .", StartCommand: "./server"}},
 		{name: "go-gin", fw: core.Framework{Name: "go-gin", Port: 8080, BuildCommand: "go build -o server .", StartCommand: "./server"}},
 		{name: "go-echo", fw: core.Framework{Name: "go-echo", Port: 8080, BuildCommand: "go build -o server .", StartCommand: "./server"}},

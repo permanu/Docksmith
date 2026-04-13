@@ -54,7 +54,7 @@ func TestSecretMount_pythonPipConf_emitsSecretInDockerfile(t *testing.T) {
 		Name:          "flask",
 		PythonVersion: "3.12",
 		PythonPM:      "pip",
-		Port:          5000,
+		Port:          8000,
 		StartCommand:  "gunicorn app:app",
 	}
 	p, err := docksmith.Plan(fw)

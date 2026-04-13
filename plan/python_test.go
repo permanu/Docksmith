@@ -50,7 +50,7 @@ func TestPlanPython_BaseImages(t *testing.T) {
 }
 
 func TestPlanPython_DefaultVersion(t *testing.T) {
-	fw := &core.Framework{Name: "flask", Port: 5000, StartCommand: "gunicorn app:app"}
+	fw := &core.Framework{Name: "flask", Port: 8000, StartCommand: "gunicorn app:app"}
 	plan := mustPlanPython(t, fw)
 	if plan.Stages[0].From != "python:3.12-slim" {
 		t.Errorf("expected default python version, got %q", plan.Stages[0].From)

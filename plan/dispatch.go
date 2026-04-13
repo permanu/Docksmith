@@ -212,9 +212,9 @@ func insertSystemDepsStep(stage *core.Stage, deps []string) {
 	depList := strings.Join(safe, " ")
 	var cmd string
 	if strings.Contains(stage.From, "alpine") {
-		cmd = "apk add --no-cache " + depList
+		cmd = "apk add --no-cache -- " + depList
 	} else {
-		cmd = "apt-get update -qq && apt-get install -y --no-install-recommends " + depList + " && rm -rf /var/lib/apt/lists/*"
+		cmd = "apt-get update -qq && apt-get install -y --no-install-recommends -- " + depList + " && rm -rf /var/lib/apt/lists/*"
 	}
 	sysStep := core.Step{Type: core.StepRun, Args: []string{cmd}}
 	insertIdx := 0

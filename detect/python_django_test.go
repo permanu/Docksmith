@@ -165,7 +165,7 @@ func TestDetectDjangoStartCommand_WSGIAutoDetect(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "myproject/wsgi.py", "application = ...\n")
 	cmd := detectDjangoStartCommand(dir)
-	want := "gunicorn --bind 0.0.0.0:${PORT:-8000} myproject.wsgi:application"
+	want := "gunicorn --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --threads 2 myproject.wsgi:application"
 	if cmd != want {
 		t.Errorf("StartCommand = %q, want %q", cmd, want)
 	}
@@ -174,7 +174,7 @@ func TestDetectDjangoStartCommand_WSGIAutoDetect(t *testing.T) {
 func TestDetectDjangoStartCommand_Fallback(t *testing.T) {
 	dir := t.TempDir()
 	cmd := detectDjangoStartCommand(dir)
-	want := "gunicorn --bind 0.0.0.0:${PORT:-8000} config.wsgi:application"
+	want := "gunicorn --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --threads 2 config.wsgi:application"
 	if cmd != want {
 		t.Errorf("StartCommand = %q, want %q", cmd, want)
 	}

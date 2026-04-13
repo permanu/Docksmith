@@ -39,7 +39,7 @@ func ResolveDockerTag(runtime, version string) string {
 	case "rust":
 		return fmt.Sprintf("rust:%s-alpine", cmp.Or(version, "1.85"))
 	case "deno":
-		return fmt.Sprintf("denoland/deno:%s", cmp.Or(version, "latest"))
+		return fmt.Sprintf("denoland/deno:%s", cmp.Or(version, "2.1.4"))
 	case "bun":
 		// oven/bun has no -alpine variants.
 		return fmt.Sprintf("oven/bun:%s", cmp.Or(version, "1"))
