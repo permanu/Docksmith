@@ -15,7 +15,7 @@ func TestSanitizeDockerfileArg(t *testing.T) {
 		{"has\nnewline", "has newline"},
 		{"has\r\nCRLF", "has  CRLF"},
 		{"multi\nline\nstring", "multi line string"},
-		{"backtick`stripped", "backtickstripped"},
+		{"backtick`preserved", "backtick`preserved"},
 		{"", ""},
 	}
 	for _, c := range cases {
