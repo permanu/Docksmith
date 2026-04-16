@@ -1,11 +1,14 @@
 // Package core defines the shared types used across all docksmith layers:
 // Framework (detection result), BuildPlan (abstract build steps), Stage,
-// Step, CacheMount, and SecretMount.
+// Step, CacheMount, SecretMount, and BuildManifest (Permanu substrate contract).
 package core
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 // Framework holds the detection result for a project directory.
@@ -48,4 +51,81 @@ func FrameworkFromJSON(data []byte) (*Framework, error) {
 		return nil, fmt.Errorf("parse framework: %w", err)
 	}
 	return &fw, nil
+}
+
+// BuildManifest is the Permanu substrate contract record for a single image
+// build. Docksmith emits it; Permanu persists it in build_manifests and stamps
+// selected fields as OCI labels on the final image (see Wheel #2 for label
+// emission). The contract is pinned in permanu/docs/substrate-contract.md —
+// field names, JSON tags, and types here must match that document exactly.
+type BuildManifest struct {
+	SchemaVersion string    `json:"schema_version"` // "1.0"
+	BuildID       string    `json:"build_id"`       // uuid-v7
+	Commit        string    `json:"commit"`         // full git sha
+	CommitShort   string    `json:"commit_short"`   // 8-char prefix
+	ReleaseName   string    `json:"release_name"`   // e.g. "amber-otter-42" (Wheel #6)
+	BuiltAt       time.Time `json:"built_at"`
+
+	Framework    FrameworkSnapshot `json:"framework"`
+	Runtime      RuntimeContract   `json:"runtime"`
+	BaseImage    BaseImageRef      `json:"base_image"`
+	Dependencies DependencyDigest  `json:"dependencies"`
+	SBOM         json.RawMessage   `json:"sbom,omitempty"`  // CycloneDX JSON
+	ImageDigest  string            `json:"image_digest"`    // sha256:... (post-build)
+	Architectures []string         `json:"architectures"`   // e.g. ["linux/amd64","linux/arm64"]
+}
+
+// FrameworkSnapshot captures the detected framework at build time. It is a
+// minimal, stable projection of Framework intended for the manifest — the full
+// Framework struct is detection-time metadata and not part of the substrate
+// contract.
+type FrameworkSnapshot struct {
+	Name     string `json:"name"`     // "nextjs", "django", "go"
+	Version  string `json:"version"`  // detected runtime version
+	Detector string `json:"detector"` // which docksmith detector matched
+}
+
+// RuntimeContract describes how the final image expects to be run. Dwaar and
+// Permanu read this to wire health checks, shutdown handling, and required env.
+type RuntimeContract struct {
+	Port           int      `json:"port"`
+	HealthPath     string   `json:"health_path"`          // "/healthz"
+	HealthCmd      string   `json:"health_cmd,omitempty"`
+	ShutdownSignal string   `json:"shutdown_signal"`      // "SIGTERM"
+	ShutdownGraceS int      `json:"shutdown_grace_s"`     // default 10
+	RequiredEnv    []string `json:"required_env"`         // e.g. ["DATABASE_URL"]
+	OptionalEnv    []string `json:"optional_env,omitempty"`
+}
+
+// BaseImageRef pins the base image reference and its content digest. Digest is
+// filled post-pull so that rebuilds are reproducible even if the upstream tag
+// moves.
+type BaseImageRef struct {
+	Image  string `json:"image"`  // "node:22-alpine"
+	Digest string `json:"digest"` // sha256:... pinned at build time
+}
+
+// DependencyDigest summarizes the dependency graph without shipping the full
+// lockfile. LockfileHashes keys on the lockfile filename (e.g. "package-lock.json")
+// and values are "sha256:<hex>" of the file contents.
+type DependencyDigest struct {
+	LockfileHashes map[string]string `json:"lockfile_hashes"`
+	DirectCount    int               `json:"direct_count"`
+	TotalCount     int               `json:"total_count"`
+}
+
+// ManifestSHA returns a sha256 digest of a compact JSON encoding of m, prefixed
+// with "sha256:". The output feeds the io.permanu.manifest.sha OCI label emitted
+// in Wheel #2 and is the canonical integrity check for the manifest blob.
+//
+// Callers must treat the returned string as opaque — the exact byte sequence is
+// stable for a given BuildManifest value (Go's encoding/json sorts map keys and
+// emits compact output with no trailing newline when used via Marshal).
+func ManifestSHA(m BuildManifest) (string, error) {
+	data, err := json.Marshal(m)
+	if err != nil {
+		return "", fmt.Errorf("marshal manifest: %w", err)
+	}
+	sum := sha256.Sum256(data)
+	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
