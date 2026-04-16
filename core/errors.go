@@ -14,10 +14,10 @@ var (
 
 // NearMiss records a partial detection match — e.g., go.mod found but no main package.
 type NearMiss struct {
-	Runtime  string // e.g. "go", "python", "node"
-	Found    string // what was found, e.g. "go.mod"
-	Missing  string // what was missing, e.g. "main package (main.go or cmd/*/main.go)"
-	Hint     string // actionable suggestion
+	Runtime string // e.g. "go", "python", "node"
+	Found   string // what was found, e.g. "go.mod"
+	Missing string // what was missing, e.g. "main package (main.go or cmd/*/main.go)"
+	Hint    string // actionable suggestion
 }
 
 // String formats a near-miss for display.
