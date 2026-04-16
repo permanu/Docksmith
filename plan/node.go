@@ -63,7 +63,14 @@ func planNode(fw *core.Framework) (*core.BuildPlan, error) {
 			pm = "pnpm"
 		}
 	}
-	nodeImg := ResolveDockerTag("node", fw.NodeVersion)
+	// When the package manager is bun, use the official oven/bun image as the
+	// build base — bun is not available in node:alpine.
+	var nodeImg string
+	if pm == "bun" {
+		nodeImg = ResolveDockerTag("bun", fw.BunVersion)
+	} else {
+		nodeImg = ResolveDockerTag("node", fw.NodeVersion)
+	}
 	installCmd := detect.PMInstallCommand(pm)
 
 	depsSteps := []core.Step{
@@ -147,7 +154,12 @@ func planNode(fw *core.Framework) (*core.BuildPlan, error) {
 			},
 		}
 		addTini(&depsStage, &runtimeStage)
-		addNonRootUser(&runtimeStage, "node")
+		// oven/bun ships with a "bun" user; node images ship with "node".
+		runtimeUser := "node"
+		if pm == "bun" {
+			runtimeUser = "bun"
+		}
+		addNonRootUser(&runtimeStage, runtimeUser)
 		addHealthcheck(&runtimeStage, "node", fw.Port)
 	}
 

@@ -92,6 +92,10 @@ var (
 	ErrInvalidPlan   = core.ErrInvalidPlan
 )
 
+// Error types
+type DetectionError = core.DetectionError
+type NearMiss = core.NearMiss
+
 // ---------------------------------------------------------------------------
 // Function aliases — re-export from subpackages
 // ---------------------------------------------------------------------------

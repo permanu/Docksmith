@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -126,7 +127,7 @@ func DetectWithOptions(dir string, opts DetectOptions) (*core.Framework, error) 
 		return &core.Framework{Name: "static", Port: 80, OutputDir: "."}, nil
 	}
 
-	return nil, fmt.Errorf("%w: no supported framework found in %s — add a Dockerfile or docksmith.toml to configure manually", core.ErrNotDetected, dir)
+	return nil, buildDetectionError(dir)
 }
 
 // loadConfigFramework loads the user config and converts it to a Framework.
@@ -216,6 +217,178 @@ func ConfigToFramework(c *config.Config) *core.Framework {
 	}
 
 	return fw
+}
+
+// markerFileList is the ordered set of files scanned during detection.
+// Used to populate DetectionError.FilesChecked for user diagnostics.
+var markerFileList = []string{
+	"Dockerfile",
+	"docksmith.toml", "docksmith.yaml", "docksmith.yml", "docksmith.json",
+	"package.json", "go.mod", "requirements.txt", "pyproject.toml", "Pipfile",
+	"Cargo.toml", "Gemfile", "composer.json", "mix.exs",
+	"pom.xml", "build.gradle", "build.gradle.kts", "*.csproj",
+	"deno.json", "deno.jsonc", "bun.lockb", "bun.lock",
+	"main.go", "index.html",
+}
+
+// nearMissChecks scans the directory for partial matches — files that indicate
+// a runtime but are insufficient for full detection.
+func nearMissChecks(dir string) []core.NearMiss {
+	var misses []core.NearMiss
+
+	// Go: go.mod without a main package
+	if hasFile(dir, "go.mod") {
+		if !hasFile(dir, "main.go") && findGoMainPackage(dir) == "" {
+			misses = append(misses, core.NearMiss{
+				Runtime: "go",
+				Found:   "go.mod",
+				Missing: "main package (main.go or cmd/*/main.go)",
+				Hint:    "is this a library? use --framework go --entrypoint cmd/server",
+			})
+		}
+	}
+
+	// Node: package.json without any framework-specific marker
+	if hasFile(dir, "package.json") {
+		pkg := filepath.Join(dir, "package.json")
+		knownMarkers := []string{
+			`"next"`, `"nuxt"`, "@sveltejs/kit", `"astro"`, "@remix-run",
+			`"gatsby"`, "react-scripts", "@angular/core", "@vue/cli-service",
+			"solid-start", "@solidjs/start", "@nestjs/core", `"express"`, `"fastify"`,
+			`"vite"`,
+		}
+		hasKnown := false
+		for _, m := range knownMarkers {
+			if fileContains(pkg, m) {
+				hasKnown = true
+				break
+			}
+		}
+		if !hasKnown {
+			misses = append(misses, core.NearMiss{
+				Runtime: "node",
+				Found:   "package.json",
+				Missing: "recognized framework dependency (express, next, fastify, etc.)",
+				Hint:    "add a start script in package.json or use --framework node",
+			})
+		}
+	}
+
+	// Python: requirements.txt/pyproject.toml without flask/fastapi/django
+	for _, pyFile := range []string{"requirements.txt", "pyproject.toml", "Pipfile"} {
+		if hasFile(dir, pyFile) {
+			pyPath := filepath.Join(dir, pyFile)
+			hasFramework := false
+			for _, marker := range []string{"flask", "fastapi", "django"} {
+				if fileContains(pyPath, marker) {
+					hasFramework = true
+					break
+				}
+			}
+			if !hasFramework && !hasFile(dir, "manage.py") {
+				misses = append(misses, core.NearMiss{
+					Runtime: "python",
+					Found:   pyFile,
+					Missing: "web framework (flask, fastapi, or django)",
+					Hint:    "add flask/fastapi to " + pyFile + " or use --framework python",
+				})
+			}
+			break // only report once for python
+		}
+	}
+
+	// Rust: Cargo.toml without actix-web or axum
+	if hasFile(dir, "Cargo.toml") {
+		cargo := filepath.Join(dir, "Cargo.toml")
+		if !fileContains(cargo, "actix-web") && !fileContains(cargo, "axum") {
+			misses = append(misses, core.NearMiss{
+				Runtime: "rust",
+				Found:   "Cargo.toml",
+				Missing: "recognized web framework (actix-web or axum)",
+				Hint:    "use --framework rust or add a docksmith.toml with runtime = \"rust\"",
+			})
+		}
+	}
+
+	// Ruby: Gemfile without rails config or sinatra
+	if hasFile(dir, "Gemfile") {
+		gemfile := filepath.Join(dir, "Gemfile")
+		if !hasFile(dir, "config/routes.rb") && !fileContains(gemfile, "sinatra") {
+			misses = append(misses, core.NearMiss{
+				Runtime: "ruby",
+				Found:   "Gemfile",
+				Missing: "Rails structure (config/routes.rb) or sinatra dependency",
+				Hint:    "use --framework ruby or add a docksmith.toml with runtime = \"ruby\"",
+			})
+		}
+	}
+
+	// Java: pom.xml/build.gradle without spring-boot/quarkus/micronaut
+	for _, javaFile := range []string{"pom.xml", "build.gradle", "build.gradle.kts"} {
+		if hasFile(dir, javaFile) {
+			jPath := filepath.Join(dir, javaFile)
+			if !fileContains(jPath, "spring-boot") && !fileContains(jPath, "quarkus") && !fileContains(jPath, "micronaut") {
+				// Maven/Gradle generic detectors exist, so this is only a near-miss
+				// if the generic detector also failed (no pom.xml at all for gradle case).
+				// Actually, maven/gradle generic detectors DO match, so this shouldn't
+				// fire. Only add near-miss if the file was somehow not caught.
+				// Skip — the generic detectors handle this.
+			}
+			break
+		}
+	}
+
+	// Elixir: mix.exs without phoenix
+	if hasFile(dir, "mix.exs") {
+		if !fileContains(filepath.Join(dir, "mix.exs"), "phoenix") {
+			misses = append(misses, core.NearMiss{
+				Runtime: "elixir",
+				Found:   "mix.exs",
+				Missing: "phoenix dependency",
+				Hint:    "use --framework elixir or add a docksmith.toml with runtime = \"elixir\"",
+			})
+		}
+	}
+
+	// PHP: composer.json without laravel/symfony/slim/index.php
+	if hasFile(dir, "composer.json") && !hasFile(dir, "artisan") && !hasFile(dir, "index.php") &&
+		!hasFile(dir, "symfony.lock") && !hasFile(dir, "config/bundles.php") {
+		composer := filepath.Join(dir, "composer.json")
+		if !fileContains(composer, "slim/slim") && !fileContains(composer, "symfony/framework-bundle") {
+			misses = append(misses, core.NearMiss{
+				Runtime: "php",
+				Found:   "composer.json",
+				Missing: "recognized framework (laravel, symfony, slim) or index.php",
+				Hint:    "add index.php or use --framework php",
+			})
+		}
+	}
+
+	return misses
+}
+
+// buildDetectionError constructs a rich DetectionError with near-miss info.
+func buildDetectionError(dir string) *core.DetectionError {
+	// Determine which marker files actually exist for the "scanned for" list.
+	var checked []string
+	for _, f := range markerFileList {
+		if strings.Contains(f, "*") {
+			matches, _ := filepath.Glob(filepath.Join(dir, f))
+			if len(matches) > 0 {
+				checked = append(checked, f)
+			}
+		} else if hasFile(dir, f) {
+			checked = append(checked, f+" (found)")
+		} else {
+			checked = append(checked, f)
+		}
+	}
+
+	return &core.DetectionError{
+		Dir:          dir,
+		FilesChecked: checked,
+		NearMisses:   nearMissChecks(dir),
+	}
 }
 
 func runtimeToFrameworkName(runtime string) string {

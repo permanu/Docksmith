@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -256,6 +257,112 @@ func TestValidate_SecretMount_Valid(t *testing.T) {
 	}
 	if err := plan.Validate(); err != nil {
 		t.Errorf("unexpected error for plan with secret mount: %v", err)
+	}
+}
+
+func TestDetectionError_WrapsErrNotDetected(t *testing.T) {
+	de := &DetectionError{
+		Dir:          "/tmp/myapp",
+		FilesChecked: []string{"go.mod", "package.json"},
+		NearMisses: []NearMiss{
+			{
+				Runtime: "go",
+				Found:   "go.mod",
+				Missing: "main package",
+				Hint:    "use --framework go",
+			},
+		},
+	}
+	if !errors.Is(de, ErrNotDetected) {
+		t.Error("DetectionError should wrap ErrNotDetected")
+	}
+}
+
+func TestDetectionError_ErrorMessage(t *testing.T) {
+	de := &DetectionError{
+		Dir:          "/tmp/myapp",
+		FilesChecked: []string{"go.mod", "package.json"},
+		NearMisses: []NearMiss{
+			{
+				Runtime: "go",
+				Found:   "go.mod",
+				Missing: "main package (main.go or cmd/*/main.go)",
+				Hint:    "is this a library? use --framework go --entrypoint cmd/server",
+			},
+		},
+	}
+	msg := de.Error()
+
+	// Verify key sections are present.
+	checks := []string{
+		"no framework detected in /tmp/myapp",
+		"near matches:",
+		"found go.mod but missing main package",
+		"is this a library?",
+		"docksmith.toml",
+		"Dockerfile",
+		"docksmith build --framework",
+		"docksmith registry search",
+		`runtime = "go"`,
+	}
+	for _, want := range checks {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error message missing %q\n\ngot:\n%s", want, msg)
+		}
+	}
+}
+
+func TestDetectionError_ExampleConfig_Python(t *testing.T) {
+	de := &DetectionError{
+		Dir: "/tmp/pyapp",
+		NearMisses: []NearMiss{
+			{Runtime: "python", Found: "requirements.txt", Missing: "web framework"},
+		},
+	}
+	msg := de.Error()
+	if !strings.Contains(msg, `runtime = "python"`) {
+		t.Errorf("expected python example config, got:\n%s", msg)
+	}
+	if !strings.Contains(msg, "gunicorn") {
+		t.Errorf("expected gunicorn in start command, got:\n%s", msg)
+	}
+}
+
+func TestDetectionError_NoNearMisses(t *testing.T) {
+	de := &DetectionError{
+		Dir:          "/tmp/empty",
+		FilesChecked: []string{"go.mod", "package.json"},
+	}
+	msg := de.Error()
+	if strings.Contains(msg, "near matches:") {
+		t.Error("should not show near matches section when empty")
+	}
+	if !strings.Contains(msg, "docksmith.toml") {
+		t.Errorf("should still suggest config file, got:\n%s", msg)
+	}
+}
+
+func TestNearMiss_String(t *testing.T) {
+	nm := NearMiss{
+		Runtime: "go",
+		Found:   "go.mod",
+		Missing: "main package",
+		Hint:    "use --framework go",
+	}
+	got := nm.String()
+	if got != "found go.mod but missing main package — use --framework go" {
+		t.Errorf("NearMiss.String() = %q", got)
+	}
+}
+
+func TestNearMiss_String_NoHint(t *testing.T) {
+	nm := NearMiss{
+		Found:   "go.mod",
+		Missing: "main package",
+	}
+	got := nm.String()
+	if strings.Contains(got, "—") {
+		t.Errorf("should not contain dash when no hint: %q", got)
 	}
 }
 
