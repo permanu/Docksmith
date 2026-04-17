@@ -1,7 +1,9 @@
 package docksmith
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/permanu/docksmith/config"
 	"github.com/permanu/docksmith/core"
@@ -103,6 +105,25 @@ type NearMiss = core.NearMiss
 var FrameworkFromJSON = core.FrameworkFromJSON
 var ValidateContextRoot = config.ValidateContextRoot
 
+// Wheel #1 substrate contract re-exports.
+type BuildManifest = core.BuildManifest
+type FrameworkSnapshot = core.FrameworkSnapshot
+type RuntimeContract = core.RuntimeContract
+type BaseImageRef = core.BaseImageRef
+type DependencyDigest = core.DependencyDigest
+type ManifestExtras = core.ManifestExtras
+
+var ManifestFromFramework = core.ManifestFromFramework
+var ManifestSHA = core.ManifestSHA
+var BuildLabels = emit.BuildLabels
+var ResolveBaseImageDigest = plan.ResolveBaseImageDigest
+var GenerateSBOM = plan.GenerateSBOM
+
+// ErrBaseImageUnresolvable is returned by ResolveBaseImageDigest on registry
+// failure. Callers can errors.Is against this to decide whether to proceed
+// with an empty digest or abort the build.
+var ErrBaseImageUnresolvable = plan.ErrBaseImageUnresolvable
+
 // Plan option constructors
 var (
 	WithUser                = plan.WithUser
@@ -185,6 +206,93 @@ func BuildWithOptions(dir string, detectOpts DetectOptions, planOpts ...PlanOpti
 		df = hint + df
 	}
 	return df, fw, nil
+}
+
+// BuildWithManifest runs the full pipeline and returns the Dockerfile string
+// together with a BuildManifest that includes io.permanu.* labels in the
+// rendered Dockerfile. Callers supply ManifestExtras carrying fields
+// Docksmith cannot derive (Commit, ReleaseName, BuildID, BuiltAt) and
+// optional overrides.
+//
+// Side effects:
+//   - Resolves base-image digest via ResolveBaseImageDigest when
+//     extras.BaseImageDigest is empty (network round-trip; failures are logged
+//     and the digest is left empty rather than failing the build).
+//   - Generates a CycloneDX SBOM via GenerateSBOM when extras.SBOM is nil
+//     (skipped silently when syft is not installed).
+//
+// The Dockerfile includes LABEL io.permanu.* lines on the final stage only,
+// so intermediate stages remain cache-stable across manifest churn.
+func BuildWithManifest(ctx context.Context, dir string, extras ManifestExtras, detectOpts DetectOptions, planOpts ...PlanOption) (string, BuildManifest, error) {
+	fw, err := DetectWithOptions(dir, detectOpts)
+	if err != nil {
+		return "", BuildManifest{}, fmt.Errorf("build: %w", err)
+	}
+	if fw.Name == "dockerfile" {
+		return "", BuildManifest{}, fmt.Errorf("build: framework=%q has its own Dockerfile; manifest-mode not supported", fw.Name)
+	}
+
+	p, err := Plan(fw, planOpts...)
+	if err != nil {
+		return "", BuildManifest{}, err
+	}
+	secrets := ApplySecretMounts(p, dir)
+
+	// Resolve base-image digest when the caller didn't supply one. Registry
+	// failures are non-fatal — the manifest records an empty digest, which
+	// downstream consumers can treat as "unresolved at build time".
+	if extras.BaseImageDigest == "" {
+		// Pick the final stage's base image (the runtime layer) for pinning.
+		// Intermediate build stages use their own base images and are not
+		// part of the shipped artifact.
+		if baseRef := finalStageImage(p); baseRef != "" && core.IsImageRef(baseRef) {
+			digest, derr := ResolveBaseImageDigest(ctx, baseRef)
+			if derr != nil {
+				// Non-fatal: log and continue with empty digest. Downstream
+				// consumers treat empty digest as "unresolved at build time".
+				slog.Warn("BuildWithManifest: base image digest unresolved",
+					slog.String("image", baseRef),
+					slog.String("err", derr.Error()),
+				)
+			} else {
+				extras.BaseImageDigest = digest
+			}
+		}
+	}
+
+	// Generate SBOM when the caller didn't supply one. syft-missing is
+	// silently skipped (Week 3 best-effort).
+	if extras.SBOM == nil {
+		sbom, serr := GenerateSBOM(ctx, dir)
+		if serr != nil {
+			slog.Warn("BuildWithManifest: SBOM generation failed",
+				slog.String("context_dir", dir),
+				slog.String("err", serr.Error()),
+			)
+		} else if sbom != nil {
+			extras.SBOM = sbom
+		}
+	}
+
+	m := ManifestFromFramework(*fw, extras)
+	df := emit.EmitDockerfileWithManifest(p, &m)
+	if df == "" {
+		return "", BuildManifest{}, fmt.Errorf("build: plan produced no stages for framework %s", fw.Name)
+	}
+	if hint := SecretBuildHint(secrets); hint != "" {
+		df = hint + df
+	}
+	return df, m, nil
+}
+
+// finalStageImage returns the base image of the final stage in the plan, or
+// empty string if the plan has no stages. The final stage is the one that
+// produces the shipped image; intermediate stages are build-only.
+func finalStageImage(p *BuildPlan) string {
+	if p == nil || len(p.Stages) == 0 {
+		return ""
+	}
+	return p.Stages[len(p.Stages)-1].From
 }
 
 // ---------------------------------------------------------------------------
