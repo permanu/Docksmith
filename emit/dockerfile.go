@@ -15,6 +15,15 @@ import (
 // It emits BuildKit-enhanced syntax (cache mounts, secret mounts, --link copies).
 // Returns an empty string when the plan has no stages.
 func EmitDockerfile(plan *core.BuildPlan) string {
+	return EmitDockerfileWithManifest(plan, nil)
+}
+
+// EmitDockerfileWithManifest is EmitDockerfile plus io.permanu.* OCI label
+// emission. When m is non-nil, BuildLabels(*m) is appended to the final stage
+// (and only the final stage — intermediate stages carry no manifest metadata
+// so buildkit layer caching stays stable across unrelated manifest changes).
+// Passing nil is equivalent to EmitDockerfile.
+func EmitDockerfileWithManifest(plan *core.BuildPlan, m *core.BuildManifest) string {
 	if len(plan.Stages) == 0 {
 		slog.Warn("EmitDockerfile called with empty build plan")
 		return ""
@@ -25,11 +34,15 @@ func EmitDockerfile(plan *core.BuildPlan) string {
 	// BuildKit syntax directive — must appear first.
 	b.WriteString("# syntax=docker/dockerfile:1\n")
 
+	finalIdx := len(plan.Stages) - 1
 	for i, stage := range plan.Stages {
 		b.WriteString("\n")
 		writeStageHeader(&b, stage, i)
 		for _, step := range stage.Steps {
 			writeStep(&b, step)
+		}
+		if i == finalIdx && m != nil {
+			appendFinalStageLabels(&b, *m)
 		}
 	}
 
