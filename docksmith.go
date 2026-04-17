@@ -146,7 +146,11 @@ var (
 var ResolveDockerTag = plan.ResolveDockerTag
 var FrameworkDefaults = plan.FrameworkDefaults
 var BuildkitCacheArgs = plan.BuildkitCacheArgs
+var BuildkitMultiArchCacheArgs = plan.BuildkitMultiArchCacheArgs
 var CacheDir = plan.CacheDir
+var DefaultArchitectures = plan.DefaultArchitectures
+var BuildxMultiArchArgs = plan.BuildxMultiArchArgs
+var BuildxPushArgs = plan.BuildxPushArgs
 var ApplySecretMounts = plan.ApplySecretMounts
 var SecretBuildHint = plan.SecretBuildHint
 var SecretIgnoreFiles = plan.SecretIgnoreFiles
