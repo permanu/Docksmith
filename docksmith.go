@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+
 	"github.com/permanu/docksmith/config"
 	"github.com/permanu/docksmith/core"
 	"github.com/permanu/docksmith/detect"
@@ -190,25 +193,41 @@ func Build(dir string, opts ...PlanOption) (string, *Framework, error) {
 // When private registry indicators are found, secret mounts are wired
 // into the plan and a build hint comment is prepended to the Dockerfile.
 func BuildWithOptions(dir string, detectOpts DetectOptions, planOpts ...PlanOption) (string, *Framework, error) {
-	fw, err := DetectWithOptions(dir, detectOpts)
+	ctx := context.Background()
+	ctx, span := tracer().Start(ctx, "docksmith.build")
+	defer span.End()
+
+	fw, err := detectWithSpan(ctx, dir, detectOpts)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return "", nil, fmt.Errorf("build: %w", err)
 	}
 	if fw.Name == "dockerfile" {
 		return "", fw, nil
 	}
-	p, err := Plan(fw, planOpts...)
+
+	p, err := planWithSpan(ctx, fw, planOpts...)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return "", fw, err
 	}
 	secrets := ApplySecretMounts(p, dir)
 	df := EmitDockerfile(p)
 	if df == "" {
-		return "", fw, fmt.Errorf("build: plan produced no stages for framework %s", fw.Name)
+		err := fmt.Errorf("build: plan produced no stages for framework %s", fw.Name)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return "", fw, err
 	}
 	if hint := SecretBuildHint(secrets); hint != "" {
 		df = hint + df
 	}
+	span.SetAttributes(
+		attribute.String("docksmith.detected_language", fw.Name),
+		attribute.String("docksmith.dockerfile_path", dir),
+	)
 	return df, fw, nil
 }
 
@@ -228,16 +247,26 @@ func BuildWithOptions(dir string, detectOpts DetectOptions, planOpts ...PlanOpti
 // The Dockerfile includes LABEL io.permanu.* lines on the final stage only,
 // so intermediate stages remain cache-stable across manifest churn.
 func BuildWithManifest(ctx context.Context, dir string, extras ManifestExtras, detectOpts DetectOptions, planOpts ...PlanOption) (string, BuildManifest, error) {
-	fw, err := DetectWithOptions(dir, detectOpts)
+	ctx, span := tracer().Start(ctx, "docksmith.build")
+	defer span.End()
+
+	fw, err := detectWithSpan(ctx, dir, detectOpts)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return "", BuildManifest{}, fmt.Errorf("build: %w", err)
 	}
 	if fw.Name == "dockerfile" {
-		return "", BuildManifest{}, fmt.Errorf("build: framework=%q has its own Dockerfile; manifest-mode not supported", fw.Name)
+		err := fmt.Errorf("build: framework=%q has its own Dockerfile; manifest-mode not supported", fw.Name)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return "", BuildManifest{}, err
 	}
 
-	p, err := Plan(fw, planOpts...)
+	p, err := planWithSpan(ctx, fw, planOpts...)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return "", BuildManifest{}, err
 	}
 	secrets := ApplySecretMounts(p, dir)
@@ -250,7 +279,7 @@ func BuildWithManifest(ctx context.Context, dir string, extras ManifestExtras, d
 		// Intermediate build stages use their own base images and are not
 		// part of the shipped artifact.
 		if baseRef := finalStageImage(p); baseRef != "" && core.IsImageRef(baseRef) {
-			digest, derr := ResolveBaseImageDigest(ctx, baseRef)
+			digest, derr := resolveBaseImageDigestWithSpan(ctx, baseRef)
 			if derr != nil {
 				// Non-fatal: log and continue with empty digest. Downstream
 				// consumers treat empty digest as "unresolved at build time".
@@ -281,11 +310,19 @@ func BuildWithManifest(ctx context.Context, dir string, extras ManifestExtras, d
 	m := ManifestFromFramework(*fw, extras)
 	df := emit.EmitDockerfileWithManifest(p, &m)
 	if df == "" {
-		return "", BuildManifest{}, fmt.Errorf("build: plan produced no stages for framework %s", fw.Name)
+		err := fmt.Errorf("build: plan produced no stages for framework %s", fw.Name)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return "", BuildManifest{}, err
 	}
 	if hint := SecretBuildHint(secrets); hint != "" {
 		df = hint + df
 	}
+	span.SetAttributes(
+		attribute.String("docksmith.detected_language", fw.Name),
+		attribute.String("docksmith.dockerfile_path", dir),
+		attribute.Int64("docksmith.layers_count", int64(len(p.Stages))),
+	)
 	return df, m, nil
 }
 
