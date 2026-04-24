@@ -337,6 +337,19 @@ Stages map 1:1 to Dockerfile stages — if you can read a multi-stage Dockerfile
 
 The community registry (`docksmith registry search`) provides additional definitions you can install with `docksmith registry install`.
 
+## Observability
+
+Docksmith emits OpenTelemetry spans for every build stage. Spans propagate through any installed `TracerProvider`; when linked into Permanu, they flow through the unified event bus and render in Permanu's trace viewer.
+
+| Span name | Attributes |
+|---|---|
+| `docksmith.build` | `docksmith.detected_language`, `docksmith.dockerfile_path`, `docksmith.layers_count` |
+| `docksmith.classify` | `docksmith.detected_language`, `docksmith.detected_port` |
+| `docksmith.plan` | `docksmith.detected_language`, `docksmith.layers_count` |
+| `docksmith.cache_check` | `docksmith.image_tag`, `docksmith.digest` |
+
+When no `TracerProvider` is installed (e.g. standalone CLI usage or unit tests), the global OTel default returns a no-op tracer — safe and zero-overhead.
+
 ## Development
 
 ```bash
