@@ -66,13 +66,13 @@ type BuildManifest struct {
 	ReleaseName   string    `json:"release_name"`   // e.g. "amber-otter-42" (Wheel #6)
 	BuiltAt       time.Time `json:"built_at"`
 
-	Framework    FrameworkSnapshot `json:"framework"`
-	Runtime      RuntimeContract   `json:"runtime"`
-	BaseImage    BaseImageRef      `json:"base_image"`
-	Dependencies DependencyDigest  `json:"dependencies"`
-	SBOM         json.RawMessage   `json:"sbom,omitempty"`  // CycloneDX JSON
-	ImageDigest  string            `json:"image_digest"`    // sha256:... (post-build)
-	Architectures []string         `json:"architectures"`   // e.g. ["linux/amd64","linux/arm64"]
+	Framework     FrameworkSnapshot `json:"framework"`
+	Runtime       RuntimeContract   `json:"runtime"`
+	BaseImage     BaseImageRef      `json:"base_image"`
+	Dependencies  DependencyDigest  `json:"dependencies"`
+	SBOM          json.RawMessage   `json:"sbom,omitempty"` // CycloneDX JSON
+	ImageDigest   string            `json:"image_digest"`   // sha256:... (post-build)
+	Architectures []string          `json:"architectures"`  // e.g. ["linux/amd64","linux/arm64"]
 }
 
 // FrameworkSnapshot captures the detected framework at build time. It is a
@@ -89,11 +89,11 @@ type FrameworkSnapshot struct {
 // Permanu read this to wire health checks, shutdown handling, and required env.
 type RuntimeContract struct {
 	Port           int      `json:"port"`
-	HealthPath     string   `json:"health_path"`          // "/healthz"
+	HealthPath     string   `json:"health_path"` // "/healthz"
 	HealthCmd      string   `json:"health_cmd,omitempty"`
-	ShutdownSignal string   `json:"shutdown_signal"`      // "SIGTERM"
-	ShutdownGraceS int      `json:"shutdown_grace_s"`     // default 10
-	RequiredEnv    []string `json:"required_env"`         // e.g. ["DATABASE_URL"]
+	ShutdownSignal string   `json:"shutdown_signal"`  // "SIGTERM"
+	ShutdownGraceS int      `json:"shutdown_grace_s"` // default 10
+	RequiredEnv    []string `json:"required_env"`     // e.g. ["DATABASE_URL"]
 	OptionalEnv    []string `json:"optional_env,omitempty"`
 }
 

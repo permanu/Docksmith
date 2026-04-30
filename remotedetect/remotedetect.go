@@ -26,15 +26,15 @@ type ServiceInfo struct {
 
 // Result holds the framework auto-detection result for a repo's file tree.
 type Result struct {
-	Framework       string       `json:"framework"`
-	BuildCommand    string       `json:"build_command"`
-	StartCommand    string       `json:"start_command"`
-	Port            int          `json:"port"`
-	HasDockerfile   bool         `json:"has_dockerfile"`
-	RootCandidates  []string     `json:"root_candidates"`
-	Directories     []string     `json:"directories"`
-	Services        []ServiceInfo `json:"services"`
-	HasDockerCompose bool        `json:"has_docker_compose"`
+	Framework        string        `json:"framework"`
+	BuildCommand     string        `json:"build_command"`
+	StartCommand     string        `json:"start_command"`
+	Port             int           `json:"port"`
+	HasDockerfile    bool          `json:"has_dockerfile"`
+	RootCandidates   []string      `json:"root_candidates"`
+	Directories      []string      `json:"directories"`
+	Services         []ServiceInfo `json:"services"`
+	HasDockerCompose bool          `json:"has_docker_compose"`
 }
 
 // ---------------------------------------------------------------------------
