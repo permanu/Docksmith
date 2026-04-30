@@ -26,13 +26,13 @@ type ManifestExtras struct {
 	// Optional runtime overrides. When zero-valued, defaults are derived from
 	// the Framework (Port) or the substrate contract defaults (SIGTERM, 10s,
 	// /healthz).
-	Port            int
-	HealthPath      string
-	HealthCmd       string
-	ShutdownSignal  string
-	ShutdownGraceS  int
-	RequiredEnv     []string
-	OptionalEnv     []string
+	Port           int
+	HealthPath     string
+	HealthCmd      string
+	ShutdownSignal string
+	ShutdownGraceS int
+	RequiredEnv    []string
+	OptionalEnv    []string
 
 	// Optional dependency counts. Zero values are preserved — the caller can
 	// populate them from lockfile parsing.
