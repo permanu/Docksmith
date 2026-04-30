@@ -94,13 +94,28 @@ CMD ["./app"]
 
 ## Install
 
-**Requirements:** Go 1.26+ (for library/CLI install). Docker only needed for `docksmith build`.
+**Library (Go projects):** `go get github.com/permanu/docksmith`
+
+**CLI:**
 
 ```bash
+# Go users — installs from source (needs Go 1.26+)
 go install github.com/permanu/docksmith/cmd/docksmith@latest
+
+# Anyone else — pre-built binary (Linux/macOS, amd64/arm64)
+curl -fsSL https://raw.githubusercontent.com/permanu/Docksmith/main/install.sh | sh
+
+# Pin a version
+curl -fsSL https://raw.githubusercontent.com/permanu/Docksmith/main/install.sh | sh -s -- v0.4.2
+
+# Install to a user-writable dir (no sudo)
+INSTALL_DIR=$HOME/.local/bin \
+  curl -fsSL https://raw.githubusercontent.com/permanu/Docksmith/main/install.sh | sh
 ```
 
-Or grab a binary from the [releases page](https://github.com/permanu/docksmith/releases).
+The script verifies the SHA-256 checksum from the release's `checksums.txt`. Windows users: use `go install` or download a `.zip` from the [releases page](https://github.com/permanu/docksmith/releases).
+
+Docker is only needed for `docksmith build`.
 
 ## Quick start
 
