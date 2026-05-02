@@ -46,7 +46,13 @@ func detectNodeVersion(dir string) string {
 }
 
 // detectPackageManager reads the package manager from project files.
-// Priority: packageManager field > lockfiles > default "npm".
+// Priority: packageManager field > lockfiles (bun > pnpm > yarn > npm) > default "npm".
+//
+// The lockfile priority intentionally favours bun over pnpm: Permanu's own
+// frontends use bun (feedback_bun_not_npm.md), and a project that ships a
+// bun.lockb is declaring bun as the source of truth even if a stale
+// pnpm-lock.yaml lingers in the tree. Use LockfileConflicts to surface
+// ambiguity to callers that want to warn the operator.
 func detectPackageManager(dir string) string {
 	if data, err := os.ReadFile(filepath.Join(dir, "package.json")); err == nil {
 		var pkg packageJSON
@@ -58,16 +64,37 @@ func detectPackageManager(dir string) string {
 			}
 		}
 	}
-	if hasFile(dir, "pnpm-lock.yaml") {
-		return "pnpm"
-	}
 	if hasFile(dir, "bun.lockb") || hasFile(dir, "bun.lock") {
 		return "bun"
+	}
+	if hasFile(dir, "pnpm-lock.yaml") {
+		return "pnpm"
 	}
 	if hasFile(dir, "yarn.lock") {
 		return "yarn"
 	}
+	if hasFile(dir, "package-lock.json") {
+		return "npm"
+	}
 	return "npm"
+}
+
+// LockfileConflicts returns the names of every Node lockfile present in dir.
+// Callers should warn the operator whenever the slice has length > 1: a project
+// with multiple lockfiles is ambiguous, and detectPackageManager picks one
+// deterministically (see priority order) but the operator should commit to a
+// single package manager.
+func LockfileConflicts(dir string) []string {
+	var found []string
+	for _, name := range []string{"bun.lockb", "bun.lock", "pnpm-lock.yaml", "yarn.lock", "package-lock.json"} {
+		if hasFile(dir, name) {
+			found = append(found, name)
+		}
+	}
+	if len(found) <= 1 {
+		return nil
+	}
+	return found
 }
 
 // PMRunBuild returns the package-manager-specific build command.
