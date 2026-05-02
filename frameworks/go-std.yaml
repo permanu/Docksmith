@@ -74,3 +74,13 @@ tests:
       lib.go: "package mylib\n\nfunc Foo() {}\n"
     expect:
       detected: false
+
+  - name: monorepo with module-name-matching cmd subdir
+    fixture:
+      go.mod: "module github.com/permanu/deploy\n\ngo 1.22\n"
+      cmd/deploy/main.go: "package main\n\nfunc main() {}\n"
+      cmd/agent/main.go: "package main\n\nfunc main() {}\n"
+    expect:
+      detected: true
+      framework: go
+      port: 8080
