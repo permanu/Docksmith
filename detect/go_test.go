@@ -213,3 +213,71 @@ func TestDetectGoStd_GoModNoMain(t *testing.T) {
 		t.Errorf("got %q, want nil when no main package found", fw.Name)
 	}
 }
+
+func TestFindGoMainPackages_MultipleCmdDirs(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "go.mod", "module example.com/app\n\ngo 1.22\n")
+	writeFile(t, dir, "cmd/server/main.go", "package main\nfunc main() {}\n")
+	writeFile(t, dir, "cmd/worker/main.go", "package main\nfunc main() {}\n")
+	got := findGoMainPackages(dir)
+	want := []string{"./cmd/server", "./cmd/worker"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("findGoMainPackages = %v, want %v", got, want)
+	}
+}
+
+func TestFindGoMainPackage_AmbiguousReturnsEmpty(t *testing.T) {
+	// Two cmd/* dirs, neither matches module name nor a preferred name.
+	dir := t.TempDir()
+	writeFile(t, dir, "go.mod", "module example.com/myproject\n\ngo 1.22\n")
+	writeFile(t, dir, "cmd/alpha/main.go", "package main\nfunc main() {}\n")
+	writeFile(t, dir, "cmd/beta/main.go", "package main\nfunc main() {}\n")
+	if got := findGoMainPackage(dir); got != "" {
+		t.Errorf("findGoMainPackage = %q, want empty for ambiguous monorepo", got)
+	}
+}
+
+func TestFindGoMainPackage_ModuleNameMatch(t *testing.T) {
+	// Module name "deploy" disambiguates cmd/deploy vs cmd/agent.
+	dir := t.TempDir()
+	writeFile(t, dir, "go.mod", "module github.com/permanu/deploy\n\ngo 1.22\n")
+	writeFile(t, dir, "cmd/agent/main.go", "package main\nfunc main() {}\n")
+	writeFile(t, dir, "cmd/deploy/main.go", "package main\nfunc main() {}\n")
+	if got := findGoMainPackage(dir); got != "./cmd/deploy" {
+		t.Errorf("findGoMainPackage = %q, want %q", got, "./cmd/deploy")
+	}
+}
+
+func TestFindGoMainPackage_PreferredName(t *testing.T) {
+	// No module-name match, but "server" wins by preferred-name list.
+	dir := t.TempDir()
+	writeFile(t, dir, "go.mod", "module github.com/foo/bar\n\ngo 1.22\n")
+	writeFile(t, dir, "cmd/server/main.go", "package main\nfunc main() {}\n")
+	writeFile(t, dir, "cmd/migrate/main.go", "package main\nfunc main() {}\n")
+	if got := findGoMainPackage(dir); got != "./cmd/server" {
+		t.Errorf("findGoMainPackage = %q, want %q", got, "./cmd/server")
+	}
+}
+
+func TestDetectGoStd_AmbiguousMonorepoReturnsNil(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "go.mod", "module example.com/foo\n\ngo 1.22\n")
+	writeFile(t, dir, "cmd/alpha/main.go", "package main\nfunc main() {}\n")
+	writeFile(t, dir, "cmd/beta/main.go", "package main\nfunc main() {}\n")
+	if fw := detectGoStd(dir); fw != nil {
+		t.Errorf("got %q, want nil for ambiguous monorepo (caller surfaces near-miss)", fw.Name)
+	}
+}
+
+func TestDetectGoStd_ConfigOverrideHonoredByCallers(t *testing.T) {
+	// Sanity: when ambiguous, a docksmith.toml with build.command bypasses
+	// the detector entirely (handled in detect.go's loadConfigFramework).
+	// Here we just confirm the detector itself doesn't pretend to resolve it.
+	dir := t.TempDir()
+	writeFile(t, dir, "go.mod", "module example.com/foo\n\ngo 1.22\n")
+	writeFile(t, dir, "cmd/alpha/main.go", "package main\nfunc main() {}\n")
+	writeFile(t, dir, "cmd/beta/main.go", "package main\nfunc main() {}\n")
+	if got := goBuildPath(dir); got != "" {
+		t.Errorf("goBuildPath = %q, want empty (ambiguous, must use config override)", got)
+	}
+}

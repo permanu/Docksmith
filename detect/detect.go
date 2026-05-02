@@ -236,14 +236,24 @@ var markerFileList = []string{
 func nearMissChecks(dir string) []core.NearMiss {
 	var misses []core.NearMiss
 
-	// Go: go.mod without a main package
-	if hasFile(dir, "go.mod") {
-		if !hasFile(dir, "main.go") && findGoMainPackage(dir) == "" {
+	// Go: go.mod without a main package, OR multiple cmd/* binaries with no
+	// way to pick one (no module-name match, no preferred name).
+	if hasFile(dir, "go.mod") && !hasFile(dir, "main.go") && findGoMainPackage(dir) == "" {
+		all := findGoMainPackages(dir)
+		switch {
+		case len(all) == 0:
 			misses = append(misses, core.NearMiss{
 				Runtime: "go",
 				Found:   "go.mod",
 				Missing: "main package (main.go or cmd/*/main.go)",
 				Hint:    "is this a library? use --framework go --entrypoint cmd/server",
+			})
+		default:
+			misses = append(misses, core.NearMiss{
+				Runtime: "go",
+				Found:   "go.mod with multiple cmd/* binaries: " + strings.Join(all, ", "),
+				Missing: "unambiguous entrypoint",
+				Hint:    "add docksmith.toml: [build]\\ncommand = \"go build -o app ./cmd/<name>\"",
 			})
 		}
 	}
