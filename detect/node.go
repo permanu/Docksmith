@@ -52,15 +52,40 @@ func detectNuxt(dir string) *core.Framework {
 }
 
 func detectSvelteKit(dir string) *core.Framework {
-	if hasFile(dir, "svelte.config.js") || hasFile(dir, "svelte.config.ts") {
-		pm := detectPackageManager(dir)
-		return newNodeFramework(dir, "sveltekit", PMRunBuild(pm), "node build", 3000, "build")
+	isSvelteKit := hasFile(dir, "svelte.config.js") || hasFile(dir, "svelte.config.ts")
+	if !isSvelteKit && hasFile(dir, "package.json") && fileContains(filepath.Join(dir, "package.json"), "@sveltejs/kit") {
+		isSvelteKit = true
 	}
-	if hasFile(dir, "package.json") && fileContains(filepath.Join(dir, "package.json"), "@sveltejs/kit") {
-		pm := detectPackageManager(dir)
-		return newNodeFramework(dir, "sveltekit", PMRunBuild(pm), "node build", 3000, "build")
+	if !isSvelteKit {
+		return nil
 	}
-	return nil
+
+	pm := detectPackageManager(dir)
+	pkg := filepath.Join(dir, "package.json")
+
+	// Adapter selection determines the start command. adapter-node produces a
+	// runnable Node server at build/index.js (run via `node build`); other
+	// adapters (static, vercel, cloudflare, netlify) produce artifacts that
+	// can't be launched as a long-running container process.
+	hasAdapterNode := hasFile(dir, "package.json") && fileContains(pkg, "@sveltejs/adapter-node")
+	hasAdapterStatic := hasFile(dir, "package.json") && fileContains(pkg, "@sveltejs/adapter-static")
+
+	startCmd := "node build"
+	switch {
+	case hasNodeStartScript(dir):
+		// User-defined start script wins — they know how to launch their app.
+		startCmd = PMRunStart(pm)
+	case hasAdapterNode:
+		// Adapter-node convention.
+		startCmd = "node build"
+	case hasAdapterStatic:
+		// adapter-static produces a static site; surface the failure at build
+		// time instead of generating a Dockerfile that crash-loops at runtime.
+		// See feedback_zero_silent_failures_enforced.md.
+		startCmd = `sh -c 'echo "sveltekit: adapter-static produces a static site, not a server. Configure @sveltejs/adapter-node or add a scripts.start entrypoint." >&2; exit 1'`
+	}
+
+	return newNodeFramework(dir, "sveltekit", PMRunBuild(pm), startCmd, 3000, "build")
 }
 
 func detectAstro(dir string) *core.Framework {

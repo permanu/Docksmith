@@ -114,6 +114,26 @@ func PMRunStart(pm string) string {
 	}
 }
 
+// hasNodeStartScript reports whether package.json defines a non-empty
+// scripts.start entry. Used by Node detectors to decide whether the safe
+// default of `<pm> start` will actually run, vs falling back to a
+// framework-specific entrypoint.
+func hasNodeStartScript(dir string) bool {
+	data, err := os.ReadFile(filepath.Join(dir, "package.json"))
+	if err != nil {
+		return false
+	}
+	var p struct {
+		Scripts struct {
+			Start string `json:"start"`
+		} `json:"scripts"`
+	}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return false
+	}
+	return strings.TrimSpace(p.Scripts.Start) != ""
+}
+
 // PMRunInstall returns a plain (non-frozen) install for backend frameworks like
 // Express where there's no build step and lockfile discipline is less strict.
 func PMRunInstall(pm string) string {
