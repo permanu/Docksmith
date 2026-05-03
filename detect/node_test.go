@@ -2,6 +2,7 @@ package detect
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/permanu/docksmith/core"
@@ -44,6 +45,67 @@ func TestDetectSvelteKit(t *testing.T) {
 	}
 	if fw.Name != "sveltekit" {
 		t.Errorf("Name = %q, want %q", fw.Name, "sveltekit")
+	}
+}
+
+// SvelteKit + adapter-node and no scripts.start must launch via `node build`,
+// not `npm start` — npm start crashes the container with "Missing script".
+func TestDetectSvelteKit_AdapterNode_NoStartScript(t *testing.T) {
+	dir := t.TempDir()
+	nodeWrite(t, dir, "svelte.config.js", `import a from '@sveltejs/adapter-node';`)
+	nodeWrite(t, dir, "package.json", `{
+		"name":"app",
+		"scripts":{"dev":"vite dev","build":"vite build"},
+		"devDependencies":{"@sveltejs/kit":"^2.0.0","@sveltejs/adapter-node":"^5.0.0"}
+	}`)
+	fw := detectSvelteKit(dir)
+	if fw == nil {
+		t.Fatal("got nil")
+	}
+	if fw.StartCommand != "node build" {
+		t.Errorf("StartCommand = %q, want %q", fw.StartCommand, "node build")
+	}
+}
+
+// An explicit scripts.start entry must win over the framework default —
+// the user knows how to launch their app.
+func TestDetectSvelteKit_ExplicitStartScript_Wins(t *testing.T) {
+	dir := t.TempDir()
+	nodeWrite(t, dir, "svelte.config.js", `import a from '@sveltejs/adapter-node';`)
+	nodeWrite(t, dir, "package.json", `{
+		"name":"app",
+		"scripts":{"start":"node custom-server.js","build":"vite build"},
+		"devDependencies":{"@sveltejs/kit":"^2.0.0","@sveltejs/adapter-node":"^5.0.0"}
+	}`)
+	fw := detectSvelteKit(dir)
+	if fw == nil {
+		t.Fatal("got nil")
+	}
+	if fw.StartCommand != "npm start" {
+		t.Errorf("StartCommand = %q, want %q", fw.StartCommand, "npm start")
+	}
+}
+
+// adapter-static produces a static site, not a server. The detector must
+// surface a build-time failure instead of generating a Dockerfile that
+// crash-loops at runtime.
+func TestDetectSvelteKit_AdapterStatic_FailsLoud(t *testing.T) {
+	dir := t.TempDir()
+	nodeWrite(t, dir, "svelte.config.js", `import a from '@sveltejs/adapter-static';`)
+	nodeWrite(t, dir, "package.json", `{
+		"name":"app",
+		"scripts":{"build":"vite build"},
+		"devDependencies":{"@sveltejs/kit":"^2.0.0","@sveltejs/adapter-static":"^3.0.0"}
+	}`)
+	fw := detectSvelteKit(dir)
+	if fw == nil {
+		t.Fatal("got nil")
+	}
+	if !strings.Contains(fw.StartCommand, "exit 1") {
+		t.Errorf("StartCommand = %q, want a failing command (exit 1) for adapter-static", fw.StartCommand)
+	}
+	if !strings.Contains(fw.StartCommand, "adapter-static") {
+		t.Errorf("StartCommand = %q, want adapter-static diagnostic message", fw.StartCommand)
 	}
 }
 
