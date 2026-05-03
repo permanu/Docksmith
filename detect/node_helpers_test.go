@@ -103,6 +103,76 @@ func TestDetectPackageManager_Default(t *testing.T) {
 	}
 }
 
+// Bun.lockb beats a stray package-lock.json — Permanu's bun-first policy.
+func TestDetectPackageManager_BunBeatsNpm(t *testing.T) {
+	dir := t.TempDir()
+	nodeWrite(t, dir, "bun.lockb", "")
+	nodeWrite(t, dir, "package-lock.json", `{"lockfileVersion":3}`)
+	if got := detectPackageManager(dir); got != "bun" {
+		t.Errorf("got %q, want %q", got, "bun")
+	}
+}
+
+// Bun.lockb wins over pnpm-lock.yaml when both are present.
+func TestDetectPackageManager_BunBeatsPnpm(t *testing.T) {
+	dir := t.TempDir()
+	nodeWrite(t, dir, "bun.lockb", "")
+	nodeWrite(t, dir, "pnpm-lock.yaml", "lockfileVersion: '6.0'\n")
+	if got := detectPackageManager(dir); got != "bun" {
+		t.Errorf("got %q, want %q", got, "bun")
+	}
+}
+
+// pnpm beats yarn when both are present.
+func TestDetectPackageManager_PnpmBeatsYarn(t *testing.T) {
+	dir := t.TempDir()
+	nodeWrite(t, dir, "pnpm-lock.yaml", "lockfileVersion: '6.0'\n")
+	nodeWrite(t, dir, "yarn.lock", "# yarn lockfile v1\n")
+	if got := detectPackageManager(dir); got != "pnpm" {
+		t.Errorf("got %q, want %q", got, "pnpm")
+	}
+}
+
+// packageManager field overrides any lockfile heuristic.
+func TestDetectPackageManager_FieldBeatsLockfile(t *testing.T) {
+	dir := t.TempDir()
+	nodeWrite(t, dir, "package.json", `{"packageManager":"yarn@4.0.0"}`)
+	nodeWrite(t, dir, "bun.lockb", "")
+	if got := detectPackageManager(dir); got != "yarn" {
+		t.Errorf("got %q, want %q", got, "yarn")
+	}
+}
+
+func TestLockfileConflicts_None(t *testing.T) {
+	dir := t.TempDir()
+	nodeWrite(t, dir, "bun.lockb", "")
+	if got := LockfileConflicts(dir); got != nil {
+		t.Errorf("got %v, want nil", got)
+	}
+}
+
+func TestLockfileConflicts_BunPlusNpm(t *testing.T) {
+	dir := t.TempDir()
+	nodeWrite(t, dir, "bun.lockb", "")
+	nodeWrite(t, dir, "package-lock.json", `{}`)
+	got := LockfileConflicts(dir)
+	if len(got) != 2 || got[0] != "bun.lockb" || got[1] != "package-lock.json" {
+		t.Errorf("got %v, want [bun.lockb package-lock.json]", got)
+	}
+}
+
+func TestLockfileConflicts_AllFour(t *testing.T) {
+	dir := t.TempDir()
+	nodeWrite(t, dir, "bun.lockb", "")
+	nodeWrite(t, dir, "pnpm-lock.yaml", "")
+	nodeWrite(t, dir, "yarn.lock", "")
+	nodeWrite(t, dir, "package-lock.json", "")
+	got := LockfileConflicts(dir)
+	if len(got) != 4 {
+		t.Errorf("got %d entries, want 4: %v", len(got), got)
+	}
+}
+
 func nodeWrite(t *testing.T, dir, name, content string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
