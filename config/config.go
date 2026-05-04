@@ -48,10 +48,20 @@ type Config struct {
 
 // Binary describes a single Go binary to build in a multi-binary project.
 type Binary struct {
-	Name       string   `toml:"name"         yaml:"name"         json:"name"`
-	Path       string   `toml:"path"         yaml:"path"         json:"path"`
-	OutputName string   `toml:"output_name"  yaml:"output_name"  json:"output_name,omitempty"`
-	BuildFlags []string `toml:"build_flags"  yaml:"build_flags"  json:"build_flags,omitempty"`
+	Name          string   `toml:"name"           yaml:"name"           json:"name"`
+	Path          string   `toml:"path"           yaml:"path"           json:"path"`
+	OutputName    string   `toml:"output_name"    yaml:"output_name"    json:"output_name,omitempty"`
+	BuildFlags    []string `toml:"build_flags"    yaml:"build_flags"    json:"build_flags,omitempty"`
+	Architectures []string `toml:"architectures"  yaml:"architectures"  json:"architectures,omitempty"`
+}
+
+// validCrossArchitectures is the set of GOARCH values allowed in Binary.Architectures.
+var validCrossArchitectures = map[string]bool{
+	"amd64":   true,
+	"arm64":   true,
+	"arm":     true,
+	"386":     true,
+	"riscv64": true,
 }
 
 // BuildConfig groups build-time overrides.
@@ -341,10 +351,27 @@ func (c *Config) validateBinaries() error {
 		if b.OutputName != "" && !reBinaryName.MatchString(b.OutputName) {
 			return fmt.Errorf("build.binaries[%d] %q: output_name %q must match ^[a-z][a-z0-9_-]*$", i, b.Name, b.OutputName)
 		}
+		if err := validateArchitectures(i, b.Name, b.Architectures); err != nil {
+			return err
+		}
 		if seen[b.Name] {
 			return fmt.Errorf("build.binaries: duplicate name %q", b.Name)
 		}
 		seen[b.Name] = true
+	}
+	return nil
+}
+
+func validateArchitectures(idx int, name string, archs []string) error {
+	seen := make(map[string]bool, len(archs))
+	for _, arch := range archs {
+		if !validCrossArchitectures[arch] {
+			return fmt.Errorf("build.binaries[%d] %q: architectures: %q is not valid; must be one of: amd64, arm64, arm, 386, riscv64", idx, name, arch)
+		}
+		if seen[arch] {
+			return fmt.Errorf("build.binaries[%d] %q: architectures: duplicate entry %q", idx, name, arch)
+		}
+		seen[arch] = true
 	}
 	return nil
 }
