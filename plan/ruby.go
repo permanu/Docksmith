@@ -87,7 +87,7 @@ func planRuby(fw *core.Framework) (*core.BuildPlan, error) {
 	}
 
 	addNonRootUser(&runtime, "")
-	addHealthcheck(&runtime, "ruby", port)
+	addHealthcheck(&runtime, "ruby", port, nil)
 
 	return &core.BuildPlan{
 		Framework:    fw.Name,

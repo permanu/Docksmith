@@ -22,7 +22,7 @@ func planPython(fw *core.Framework) (*core.BuildPlan, error) {
 
 	addTini(&builder, &runtime)
 	addNonRootUser(&runtime, "")
-	addHealthcheck(&runtime, "python", fw.Port)
+	addHealthcheck(&runtime, "python", fw.Port, nil)
 
 	return &core.BuildPlan{
 		Framework: fw.Name,

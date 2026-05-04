@@ -39,15 +39,26 @@ type Stage struct {
 	Steps []Step `json:"steps"`
 }
 
+// HealthcheckOpts carries optional HEALTHCHECK timing parameters.
+// Zero values mean "use the hardcoded default". Interval/Timeout/StartPeriod
+// must match ^\d+(ms|s|m|h)$ when set. Retries must be 0..10 (0 = omit flag).
+type HealthcheckOpts struct {
+	Interval    string `json:"interval,omitempty"`
+	Timeout     string `json:"timeout,omitempty"`
+	StartPeriod string `json:"start_period,omitempty"`
+	Retries     int    `json:"retries,omitempty"`
+}
+
 // Step is one build instruction within a stage.
 type Step struct {
-	Type         StepType      `json:"type"`
-	Args         []string      `json:"args,omitempty"`
-	CacheMount   *CacheMount   `json:"cache_mount,omitempty"`
-	SecretMounts []SecretMount `json:"secret_mounts,omitempty"`
-	CopyFrom     *CopyFrom     `json:"copy_from,omitempty"`
-	Link         bool          `json:"link,omitempty"`
-	ShellForm    bool          `json:"shell_form,omitempty"` // emit CMD/ENTRYPOINT as shell-form (supports env-var expansion)
+	Type            StepType         `json:"type"`
+	Args            []string         `json:"args,omitempty"`
+	CacheMount      *CacheMount      `json:"cache_mount,omitempty"`
+	SecretMounts    []SecretMount    `json:"secret_mounts,omitempty"`
+	CopyFrom        *CopyFrom        `json:"copy_from,omitempty"`
+	Link            bool             `json:"link,omitempty"`
+	ShellForm       bool             `json:"shell_form,omitempty"` // emit CMD/ENTRYPOINT as shell-form (supports env-var expansion)
+	HealthcheckOpts *HealthcheckOpts `json:"healthcheck_opts,omitempty"`
 }
 
 // CacheMount describes a BuildKit cache mount for a RUN step.

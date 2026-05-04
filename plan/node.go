@@ -134,7 +134,7 @@ func planNode(fw *core.Framework) (*core.BuildPlan, error) {
 			},
 		})
 		addNonRootUser(&runtimeStage, "nginx")
-		addHealthcheck(&runtimeStage, "static", 80)
+		addHealthcheck(&runtimeStage, "static", 80, nil)
 	} else {
 		startParts := strings.Fields(fw.StartCommand)
 		if len(startParts) == 0 {
@@ -160,7 +160,7 @@ func planNode(fw *core.Framework) (*core.BuildPlan, error) {
 			runtimeUser = "bun"
 		}
 		addNonRootUser(&runtimeStage, runtimeUser)
-		addHealthcheck(&runtimeStage, "node", fw.Port)
+		addHealthcheck(&runtimeStage, "node", fw.Port, nil)
 	}
 
 	expose := fw.Port

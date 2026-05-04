@@ -3,6 +3,8 @@ package plan
 import (
 	"reflect"
 	"testing"
+
+	"github.com/permanu/docksmith/config"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -174,5 +176,37 @@ func TestResolvePlanConfig_Empty_AllNil(t *testing.T) {
 		cfg.Expose != nil || cfg.InstallCmd != nil || cfg.BuildCmd != nil ||
 		cfg.StartCmd != nil || cfg.SystemDeps != nil || cfg.NoBuildCache {
 		t.Error("empty option slice should produce zero planConfig")
+	}
+}
+
+func TestWithHealthcheckOpts_SetsPointer(t *testing.T) {
+	opts := config.HealthcheckOpts{
+		Interval:    "30s",
+		Timeout:     "3s",
+		StartPeriod: "10s",
+		Retries:     3,
+	}
+	cfg := ResolvePlanConfig([]PlanOption{WithHealthcheckOpts(opts)})
+	if cfg.HealthcheckOpts == nil {
+		t.Fatal("HealthcheckOpts should be set")
+	}
+	if cfg.HealthcheckOpts.Interval != "30s" {
+		t.Errorf("Interval = %q, want %q", cfg.HealthcheckOpts.Interval, "30s")
+	}
+	if cfg.HealthcheckOpts.Timeout != "3s" {
+		t.Errorf("Timeout = %q, want %q", cfg.HealthcheckOpts.Timeout, "3s")
+	}
+	if cfg.HealthcheckOpts.StartPeriod != "10s" {
+		t.Errorf("StartPeriod = %q, want %q", cfg.HealthcheckOpts.StartPeriod, "10s")
+	}
+	if cfg.HealthcheckOpts.Retries != 3 {
+		t.Errorf("Retries = %d, want 3", cfg.HealthcheckOpts.Retries)
+	}
+}
+
+func TestWithHealthcheckOpts_NotSet_NilPointer(t *testing.T) {
+	cfg := ResolvePlanConfig(nil)
+	if cfg.HealthcheckOpts != nil {
+		t.Error("HealthcheckOpts should be nil when not set")
 	}
 }

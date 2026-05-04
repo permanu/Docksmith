@@ -51,7 +51,7 @@ func planDeno(fw *core.Framework) (*core.BuildPlan, error) {
 	}
 
 	addNonRootUser(&runtimeStage, "deno")
-	addHealthcheck(&runtimeStage, "deno", fw.Port)
+	addHealthcheck(&runtimeStage, "deno", fw.Port, nil)
 
 	return &core.BuildPlan{
 		Framework: fw.Name,

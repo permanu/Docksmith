@@ -56,6 +56,7 @@ type Binary = config.Binary
 type StartConfig = config.StartConfig
 type InstallConfig = config.InstallConfig
 type RuntimeCfg = config.RuntimeCfg
+type HealthcheckOpts = config.HealthcheckOpts
 type SecretConfig = config.SecretConfig
 type ConfigAssetCopy = config.AssetCopy
 type ExternalTool = config.ExternalTool
@@ -136,6 +137,7 @@ var (
 	WithUser                = plan.WithUser
 	WithHealthcheck         = plan.WithHealthcheck
 	WithHealthcheckDisabled = plan.WithHealthcheckDisabled
+	WithHealthcheckOpts     = plan.WithHealthcheckOpts
 	WithRuntimeImage        = plan.WithRuntimeImage
 	WithBaseImage           = plan.WithBaseImage
 	WithEntrypoint          = plan.WithEntrypoint
@@ -468,6 +470,10 @@ func ConfigToPlanOptions(c *Config) ([]PlanOption, error) {
 		} else {
 			opts = append(opts, WithHealthcheck(c.RuntimeConfig.Healthcheck))
 		}
+	}
+	hco := c.RuntimeConfig.HealthcheckOpts
+	if hco.Interval != "" || hco.Timeout != "" || hco.StartPeriod != "" || hco.Retries > 0 {
+		opts = append(opts, WithHealthcheckOpts(hco))
 	}
 
 	if len(c.Secrets) > 0 {

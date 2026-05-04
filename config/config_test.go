@@ -59,3 +59,39 @@ func TestValidate_MissingRuntime(t *testing.T) {
 		t.Fatal("want error for missing runtime, got nil")
 	}
 }
+
+func TestHealthcheckOpts_ValidateOK(t *testing.T) {
+	valid := []HealthcheckOpts{
+		{},
+		{Interval: "30s", Timeout: "3s", StartPeriod: "10s", Retries: 3},
+		{Interval: "1m"},
+		{Timeout: "500ms"},
+		{Retries: 0},
+		{Retries: 10},
+	}
+	for _, h := range valid {
+		if err := h.validate(); err != nil {
+			t.Errorf("validate(%+v) unexpected error: %v", h, err)
+		}
+	}
+}
+
+func TestHealthcheckOpts_ValidateErrors(t *testing.T) {
+	cases := []struct {
+		name string
+		opts HealthcheckOpts
+	}{
+		{"bad interval", HealthcheckOpts{Interval: "30"}},
+		{"bad timeout", HealthcheckOpts{Timeout: "xyz"}},
+		{"bad start_period", HealthcheckOpts{StartPeriod: "10 s"}},
+		{"retries too high", HealthcheckOpts{Retries: 11}},
+		{"retries negative", HealthcheckOpts{Retries: -1}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.opts.validate(); err == nil {
+				t.Errorf("validate(%+v): expected error, got nil", tc.opts)
+			}
+		})
+	}
+}

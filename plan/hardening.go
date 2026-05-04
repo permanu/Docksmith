@@ -2,8 +2,10 @@ package plan
 
 import (
 	"fmt"
-	"github.com/permanu/docksmith/core"
 	"strings"
+
+	"github.com/permanu/docksmith/config"
+	"github.com/permanu/docksmith/core"
 )
 
 // addNonRootUser appends user setup steps to a stage.
@@ -33,15 +35,26 @@ func addNonRootUser(stage *core.Stage, builtInUser string) {
 
 // addHealthcheck appends a HEALTHCHECK step appropriate for the runtime.
 // Go and Rust use distroless images with no shell — no healthcheck is added.
-func addHealthcheck(stage *core.Stage, runtime string, port int) {
+// opts may be nil; when nil the hardcoded defaults are rendered at emit time.
+func addHealthcheck(stage *core.Stage, runtime string, port int, opts *config.HealthcheckOpts) {
 	cmd := healthcheckCmd(runtime, port)
 	if cmd == "" {
 		return
 	}
-	stage.Steps = append(stage.Steps, core.Step{
+	step := core.Step{
 		Type: core.StepHealthcheck,
 		Args: []string{cmd},
-	})
+	}
+	if opts != nil {
+		o := core.HealthcheckOpts{
+			Interval:    opts.Interval,
+			Timeout:     opts.Timeout,
+			StartPeriod: opts.StartPeriod,
+			Retries:     opts.Retries,
+		}
+		step.HealthcheckOpts = &o
+	}
+	stage.Steps = append(stage.Steps, step)
 }
 
 func healthcheckCmd(runtime string, port int) string {

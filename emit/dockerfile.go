@@ -131,13 +131,44 @@ func writeStep(b *strings.Builder, step core.Step) {
 
 	case core.StepHealthcheck:
 		cmd := SanitizeDockerfileArg(strings.Join(step.Args, " "))
-		fmt.Fprintf(b, "HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD %s\n", cmd)
+		fmt.Fprintf(b, "HEALTHCHECK %s CMD %s\n", healthcheckFlags(step.HealthcheckOpts), cmd)
 
 	case core.StepFetchTool:
 		if len(step.Args) == 4 {
 			fmt.Fprintf(b, "RUN %s\n", fetchToolRun(step.Args[0], step.Args[1], step.Args[2], step.Args[3]))
 		}
 	}
+}
+
+// healthcheckFlags returns the HEALTHCHECK flag string for a step.
+// When opts is nil or all zero, it returns the hardcoded defaults so output is
+// byte-identical to the pre-configurable behavior.
+func healthcheckFlags(opts *core.HealthcheckOpts) string {
+	interval := "30s"
+	timeout := "5s"
+	startPeriod := "10s"
+	retries := 0
+
+	if opts != nil {
+		if opts.Interval != "" {
+			interval = opts.Interval
+		}
+		if opts.Timeout != "" {
+			timeout = opts.Timeout
+		}
+		if opts.StartPeriod != "" {
+			startPeriod = opts.StartPeriod
+		}
+		if opts.Retries > 0 {
+			retries = opts.Retries
+		}
+	}
+
+	flags := fmt.Sprintf("--interval=%s --timeout=%s --start-period=%s", interval, timeout, startPeriod)
+	if retries > 0 {
+		flags += fmt.Sprintf(" --retries=%d", retries)
+	}
+	return flags
 }
 
 // fetchToolRun builds the multi-line shell command for a StepFetchTool step.

@@ -98,25 +98,37 @@ type SecretConfig struct {
 	Env    string `toml:"env"    yaml:"env"    json:"env,omitempty"`
 }
 
+// HealthcheckOpts carries optional HEALTHCHECK timing parameters for docksmith.toml/yaml/json.
+// Zero values mean "use the hardcoded default". Interval/Timeout/StartPeriod must
+// match ^\d+(ms|s|m|h)$ when set. Retries must be 0..10 (0 means omit the flag).
+type HealthcheckOpts struct {
+	Interval    string `toml:"interval"     yaml:"interval"     json:"interval,omitempty"`
+	Timeout     string `toml:"timeout"      yaml:"timeout"      json:"timeout,omitempty"`
+	StartPeriod string `toml:"start_period" yaml:"start_period" json:"start_period,omitempty"`
+	Retries     int    `toml:"retries"      yaml:"retries"      json:"retries,omitempty"`
+}
+
 // RuntimeCfg groups runtime-stage overrides.
 // User and Healthcheck use sentinel booleans because false disables the feature.
 type RuntimeCfg struct {
-	Image       string `toml:"image"         yaml:"image"         json:"image,omitempty"`
-	Expose      int    `toml:"expose"        yaml:"expose"        json:"expose,omitempty"`
-	ImageFamily string `toml:"image_family"  yaml:"image_family"  json:"image_family,omitempty"`
-	User        string `toml:"-"             yaml:"-"             json:"-"`
-	UserSet     bool   `toml:"-"             yaml:"-"             json:"-"`
-	Healthcheck string `toml:"-"             yaml:"-"             json:"-"`
-	HCSet       bool   `toml:"-"             yaml:"-"             json:"-"`
+	Image           string          `toml:"image"             yaml:"image"             json:"image,omitempty"`
+	Expose          int             `toml:"expose"            yaml:"expose"            json:"expose,omitempty"`
+	ImageFamily     string          `toml:"image_family"      yaml:"image_family"      json:"image_family,omitempty"`
+	HealthcheckOpts HealthcheckOpts `toml:"healthcheck_opts"  yaml:"healthcheck_opts"  json:"healthcheck_opts,omitempty"`
+	User            string          `toml:"-"                 yaml:"-"                 json:"-"`
+	UserSet         bool            `toml:"-"                 yaml:"-"                 json:"-"`
+	Healthcheck     string          `toml:"-"                 yaml:"-"                 json:"-"`
+	HCSet           bool            `toml:"-"                 yaml:"-"                 json:"-"`
 }
 
 // rawRuntimeCfg accepts bool or string for user/healthcheck during decode.
 type rawRuntimeCfg struct {
-	Image       string `toml:"image"         yaml:"image"         json:"image,omitempty"`
-	Expose      int    `toml:"expose"        yaml:"expose"        json:"expose,omitempty"`
-	ImageFamily string `toml:"image_family"  yaml:"image_family"  json:"image_family,omitempty"`
-	User        any    `toml:"user"          yaml:"user"          json:"user,omitempty"`
-	Healthcheck any    `toml:"healthcheck"   yaml:"healthcheck"   json:"healthcheck,omitempty"`
+	Image           string          `toml:"image"             yaml:"image"             json:"image,omitempty"`
+	Expose          int             `toml:"expose"            yaml:"expose"            json:"expose,omitempty"`
+	ImageFamily     string          `toml:"image_family"      yaml:"image_family"      json:"image_family,omitempty"`
+	HealthcheckOpts HealthcheckOpts `toml:"healthcheck_opts"  yaml:"healthcheck_opts"  json:"healthcheck_opts,omitempty"`
+	User            any             `toml:"user"              yaml:"user"              json:"user,omitempty"`
+	Healthcheck     any             `toml:"healthcheck"       yaml:"healthcheck"       json:"healthcheck,omitempty"`
 }
 
 // validImageFamilies mirrors plan.validImageFamilies to avoid a circular import.
@@ -124,11 +136,33 @@ var validImageFamilies = map[string]bool{
 	"alpine": true, "slim": true, "distroless": true,
 }
 
+var reDuration = regexp.MustCompile(`^\d+(ms|s|m|h)$`)
+
+// validate checks HealthcheckOpts field constraints.
+func (h HealthcheckOpts) validate() error {
+	for field, val := range map[string]string{
+		"runtime_config.healthcheck_opts.interval":     h.Interval,
+		"runtime_config.healthcheck_opts.timeout":      h.Timeout,
+		"runtime_config.healthcheck_opts.start_period": h.StartPeriod,
+	} {
+		if val != "" && !reDuration.MatchString(val) {
+			return fmt.Errorf("%s: %q must match ^\\d+(ms|s|m|h)$", field, val)
+		}
+	}
+	if h.Retries < 0 || h.Retries > 10 {
+		return fmt.Errorf("runtime_config.healthcheck_opts.retries: %d must be 0..10", h.Retries)
+	}
+	return nil
+}
+
 func (r rawRuntimeCfg) normalize() (RuntimeCfg, error) {
 	if r.ImageFamily != "" && !validImageFamilies[r.ImageFamily] {
 		return RuntimeCfg{}, fmt.Errorf("runtime_config.image_family %q is not valid; must be one of: alpine, slim, distroless", r.ImageFamily)
 	}
-	cfg := RuntimeCfg{Image: r.Image, Expose: r.Expose, ImageFamily: r.ImageFamily}
+	if err := r.HealthcheckOpts.validate(); err != nil {
+		return RuntimeCfg{}, err
+	}
+	cfg := RuntimeCfg{Image: r.Image, Expose: r.Expose, ImageFamily: r.ImageFamily, HealthcheckOpts: r.HealthcheckOpts}
 	if r.User != nil {
 		switch v := r.User.(type) {
 		case bool:

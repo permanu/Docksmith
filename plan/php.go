@@ -112,7 +112,7 @@ func planPHPLaravel(fw *core.Framework, phpVer string, port int) (*core.BuildPla
 	})
 
 	addNonRootUser(&runtime, "www-data")
-	addHealthcheck(&runtime, "php", port)
+	addHealthcheck(&runtime, "php", port, nil)
 
 	return &core.BuildPlan{
 		Framework:    fw.Name,

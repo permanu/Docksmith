@@ -66,7 +66,7 @@ func planJavaMaven(fw *core.Framework, javaVer string, port int) (*core.BuildPla
 	}
 
 	addNonRootUser(&runtime, "")
-	addHealthcheck(&runtime, "java", port)
+	addHealthcheck(&runtime, "java", port, nil)
 
 	return &core.BuildPlan{
 		Framework:    fw.Name,
@@ -117,7 +117,7 @@ func planJavaGradle(fw *core.Framework, javaVer string, port int) (*core.BuildPl
 	}
 
 	addNonRootUser(&runtime, "")
-	addHealthcheck(&runtime, "java", port)
+	addHealthcheck(&runtime, "java", port, nil)
 
 	return &core.BuildPlan{
 		Framework:    fw.Name,
