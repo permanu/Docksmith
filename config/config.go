@@ -27,7 +27,7 @@ type ExternalTool struct {
 	URL         string `toml:"url"          yaml:"url"          json:"url"`    // may contain ${TARGETARCH}
 	SHA256      string `toml:"sha256"       yaml:"sha256"       json:"sha256"` // 64 hex chars
 	InstallPath string `toml:"install_path" yaml:"install_path" json:"install_path"`
-	Stage       string `toml:"stage"        yaml:"stage"        json:"stage"`   // "builder" or "runtime", default "runtime"
+	Stage       string `toml:"stage"        yaml:"stage"        json:"stage"`            // "builder" or "runtime", default "runtime"
 	Format      string `toml:"format"       yaml:"format"       json:"format,omitempty"` // "tar.gz" (default), "binary", or "zip"
 }
 
