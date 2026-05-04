@@ -288,15 +288,25 @@ func applySecrets(plan *core.BuildPlan, secrets []core.SecretMount) {
 }
 
 // applyRuntimeAssets inserts COPY steps for user-declared assets into the
-// runtime stage. Steps are inserted before any CMD/ENTRYPOINT directive so
-// that framework defaults (CopyFrom steps) remain ahead of user copies.
+// runtime stage. Steps are inserted before the first USER directive so that
+// any --chown reference to a named user is valid (the user already exists).
+// If no USER step is present, falls back to inserting before CMD/ENTRYPOINT.
 func applyRuntimeAssets(stage *core.Stage, assets []core.AssetCopy) {
-	// Find insertion point: before first CMD or ENTRYPOINT step.
+	// Find insertion point: before first USER step (chown target must exist).
+	// Fallback: before first CMD or ENTRYPOINT.
 	insertIdx := len(stage.Steps)
 	for i, s := range stage.Steps {
-		if s.Type == core.StepCmd || s.Type == core.StepEntrypoint {
+		if s.Type == core.StepUser {
 			insertIdx = i
 			break
+		}
+	}
+	if insertIdx == len(stage.Steps) {
+		for i, s := range stage.Steps {
+			if s.Type == core.StepCmd || s.Type == core.StepEntrypoint {
+				insertIdx = i
+				break
+			}
 		}
 	}
 	copies := make([]core.Step, len(assets))
@@ -612,7 +622,10 @@ func applyGoWork(plan *core.BuildPlan) {
 }
 
 // applyExternalTools injects StepFetchTool steps into the appropriate stage.
-// "builder" tools go into the first stage; "runtime" (default) go into the last.
+// "builder" tools go into the first stage (appended).
+// "runtime" tools (default) are inserted before the first USER directive so
+// they execute as root and can write to system paths. If no USER step exists,
+// they are appended at the end of the runtime stage.
 func applyExternalTools(plan *core.BuildPlan, tools []config.ExternalTool) {
 	if len(plan.Stages) == 0 {
 		return
@@ -620,6 +633,8 @@ func applyExternalTools(plan *core.BuildPlan, tools []config.ExternalTool) {
 	first := &plan.Stages[0]
 	last := &plan.Stages[len(plan.Stages)-1]
 
+	// Collect runtime tool steps to insert in bulk before USER (preserves order).
+	var runtimeSteps []core.Step
 	for _, t := range tools {
 		step := core.Step{
 			Type: core.StepFetchTool,
@@ -628,7 +643,22 @@ func applyExternalTools(plan *core.BuildPlan, tools []config.ExternalTool) {
 		if t.Stage == "builder" {
 			first.Steps = append(first.Steps, step)
 		} else {
-			last.Steps = append(last.Steps, step)
+			runtimeSteps = append(runtimeSteps, step)
 		}
 	}
+
+	if len(runtimeSteps) == 0 {
+		return
+	}
+
+	// Insert runtime tool steps before the first USER directive (root-required ops).
+	// Fallback: append at end when no USER is present.
+	insertIdx := len(last.Steps)
+	for i, s := range last.Steps {
+		if s.Type == core.StepUser {
+			insertIdx = i
+			break
+		}
+	}
+	last.Steps = append(last.Steps[:insertIdx], append(runtimeSteps, last.Steps[insertIdx:]...)...)
 }
