@@ -134,8 +134,12 @@ func writeStep(b *strings.Builder, step core.Step) {
 		fmt.Fprintf(b, "HEALTHCHECK %s CMD %s\n", healthcheckFlags(step.HealthcheckOpts), cmd)
 
 	case core.StepFetchTool:
-		if len(step.Args) == 4 {
-			fmt.Fprintf(b, "RUN %s\n", fetchToolRun(step.Args[0], step.Args[1], step.Args[2], step.Args[3]))
+		if len(step.Args) >= 4 {
+			format := ""
+			if len(step.Args) >= 5 {
+				format = step.Args[4]
+			}
+			fmt.Fprintf(b, "RUN %s\n", fetchToolRun(step.Args[0], step.Args[1], step.Args[2], step.Args[3], format))
 		}
 	}
 }
@@ -172,13 +176,40 @@ func healthcheckFlags(opts *core.HealthcheckOpts) string {
 }
 
 // fetchToolRun builds the multi-line shell command for a StepFetchTool step.
-func fetchToolRun(name, url, sha256, installPath string) string {
-	base := filepath.Base(url)
-	ext := ".tar.gz"
-	if strings.HasSuffix(base, ".zip") {
+// format must be "tar.gz", "zip", "binary", or "" (defaults to "tar.gz").
+func fetchToolRun(name, url, sha256, installPath, format string) string {
+	if format == "" {
+		format = "tar.gz"
+	}
+
+	if format == "binary" {
+		dest := filepath.Join(installPath, name)
+		lines := []string{
+			`set -eux; \`,
+			`  arch="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"; \`,
+			fmt.Sprintf(`  url="%s"; \`, url),
+			fmt.Sprintf(`  curl -fsSL -o %s "$url"; \`, dest),
+			fmt.Sprintf(`  echo "%s  %s" | sha256sum -c -; \`, sha256, dest),
+			fmt.Sprintf(`  chmod +x %s`, dest),
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	// archive formats: "tar.gz" or "zip"
+	var ext string
+	if format == "zip" {
 		ext = ".zip"
+	} else {
+		ext = ".tar.gz"
 	}
 	archive := fmt.Sprintf("/tmp/%s%s", name, ext)
+
+	var extractLine string
+	if format == "zip" {
+		extractLine = fmt.Sprintf(`  unzip -o %s -d %s; \`, archive, installPath)
+	} else {
+		extractLine = fmt.Sprintf(`  tar -xzf %s -C %s; \`, archive, installPath)
+	}
 
 	lines := []string{
 		`set -eux; \`,
@@ -187,7 +218,7 @@ func fetchToolRun(name, url, sha256, installPath string) string {
 		fmt.Sprintf(`  curl -fsSL -o %s "$url"; \`, archive),
 		fmt.Sprintf(`  echo "%s  %s" | sha256sum -c -; \`, sha256, archive),
 		fmt.Sprintf(`  mkdir -p %s; \`, installPath),
-		fmt.Sprintf(`  tar -xzf %s -C %s; \`, archive, installPath),
+		extractLine,
 		fmt.Sprintf(`  rm %s`, archive),
 	}
 	return strings.Join(lines, "\n")

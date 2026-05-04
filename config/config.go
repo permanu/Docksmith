@@ -27,7 +27,8 @@ type ExternalTool struct {
 	URL         string `toml:"url"          yaml:"url"          json:"url"`    // may contain ${TARGETARCH}
 	SHA256      string `toml:"sha256"       yaml:"sha256"       json:"sha256"` // 64 hex chars
 	InstallPath string `toml:"install_path" yaml:"install_path" json:"install_path"`
-	Stage       string `toml:"stage"        yaml:"stage"        json:"stage"` // "builder" or "runtime", default "runtime"
+	Stage       string `toml:"stage"        yaml:"stage"        json:"stage"`            // "builder" or "runtime", default "runtime"
+	Format      string `toml:"format"       yaml:"format"       json:"format,omitempty"` // "tar.gz" (default), "binary", or "zip"
 }
 
 // Config represents a user-provided docksmith.toml/yaml/json configuration.
@@ -486,6 +487,9 @@ func (c *Config) validateExternalTools() error {
 		}
 		if t.Stage != "" && t.Stage != "builder" && t.Stage != "runtime" {
 			return fmt.Errorf("external_tools[%d] %q: stage must be \"builder\" or \"runtime\"", i, t.Name)
+		}
+		if t.Format != "" && t.Format != "tar.gz" && t.Format != "binary" && t.Format != "zip" {
+			return fmt.Errorf("external_tools[%d] %q: format must be \"tar.gz\", \"binary\", or \"zip\"", i, t.Name)
 		}
 	}
 	return nil
