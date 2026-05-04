@@ -157,6 +157,7 @@ var (
 	WithRuntimeAssets       = plan.WithRuntimeAssets
 	WithExternalTools       = plan.WithExternalTools
 	WithBinaries            = plan.WithBinaries
+	WithGoWork              = plan.WithGoWork
 )
 
 var ResolveDockerTag = plan.ResolveDockerTag

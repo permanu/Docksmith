@@ -188,6 +188,7 @@ func fetchToolRun(name, url, sha256, installPath, format string) string {
 			`set -eux; \`,
 			`  arch="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"; \`,
 			fmt.Sprintf(`  url="%s"; \`, url),
+			fmt.Sprintf(`  mkdir -p %s; \`, installPath),
 			fmt.Sprintf(`  curl -fsSL -o %s "$url"; \`, dest),
 			fmt.Sprintf(`  echo "%s  %s" | sha256sum -c -; \`, sha256, dest),
 			fmt.Sprintf(`  chmod +x %s`, dest),
