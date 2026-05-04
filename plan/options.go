@@ -24,6 +24,7 @@ type PlanConfig struct {
 	NoBuildCache bool
 	Secrets      []core.SecretMount
 	ContextRoot  *string
+	LdFlags      map[string]string
 }
 
 // planConfig is an internal alias kept for transition clarity.
@@ -120,6 +121,13 @@ func WithSecrets(secrets []core.SecretMount) PlanOption {
 
 func WithContextRoot(appSubdir string) PlanOption {
 	return planOptionFunc(func(c *planConfig) { c.ContextRoot = &appSubdir })
+}
+
+// WithLdFlags sets Go -X linker flags injected into the build step.
+// Keys must match ^[a-zA-Z_][a-zA-Z0-9_./]*$ and values must not contain '"' or newline.
+// Only honoured by the Go plan builder; ignored for all other runtimes.
+func WithLdFlags(flags map[string]string) PlanOption {
+	return planOptionFunc(func(c *planConfig) { c.LdFlags = flags })
 }
 
 // ResolvePlanConfig resolves a slice of PlanOption into a PlanConfig.

@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -30,8 +31,9 @@ type Config struct {
 
 // BuildConfig groups build-time overrides.
 type BuildConfig struct {
-	Command string `toml:"command"  yaml:"command"  json:"command,omitempty"`
-	NoCache bool   `toml:"no_cache" yaml:"no_cache" json:"no_cache,omitempty"`
+	Command string            `toml:"command"   yaml:"command"   json:"command,omitempty"`
+	NoCache bool              `toml:"no_cache"  yaml:"no_cache"  json:"no_cache,omitempty"`
+	LdFlags map[string]string `toml:"ldflags"   yaml:"ldflags"   json:"ldflags,omitempty"`
 }
 
 // StartConfig groups start-time overrides.
@@ -242,7 +244,24 @@ func (c *Config) Validate() error {
 	if c.Start.Command == "" && c.Runtime != "static" {
 		return fmt.Errorf("start.command is required for runtime %q", c.Runtime)
 	}
+	if err := c.validateLdFlags(); err != nil {
+		return err
+	}
 	return c.validateSecrets()
+}
+
+var ldflagsKeyRE = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_./]*$`)
+
+func (c *Config) validateLdFlags() error {
+	for k, v := range c.Build.LdFlags {
+		if !ldflagsKeyRE.MatchString(k) {
+			return fmt.Errorf("build.ldflags: key %q must match ^[a-zA-Z_][a-zA-Z0-9_./]*$", k)
+		}
+		if strings.ContainsAny(v, "\"\n") {
+			return fmt.Errorf("build.ldflags: value for key %q must not contain '\"' or newline", k)
+		}
+	}
+	return nil
 }
 
 func (c *Config) validateSecrets() error {
