@@ -2,8 +2,10 @@ package plan
 
 import (
 	"errors"
-	"github.com/permanu/docksmith/core"
+	"strings"
 	"testing"
+
+	"github.com/permanu/docksmith/core"
 )
 
 func TestPlan_AllFrameworks(t *testing.T) {
@@ -94,5 +96,74 @@ func TestPlan_NilFramework(t *testing.T) {
 	_, err := Plan(nil)
 	if err == nil {
 		t.Fatal("expected error for nil framework, got nil")
+	}
+}
+
+// goFW is a minimal Go framework used across RuntimeSystemDeps tests.
+var goFW = core.Framework{Name: "go", Port: 8080, BuildCommand: "go build -o server .", StartCommand: "./server"}
+
+func TestRuntimeSystemDeps_Alpine(t *testing.T) {
+	p, err := Plan(&goFW,
+		WithRuntimeImage("alpine:3.21"),
+		WithRuntimeSystemDeps("ca-certificates", "tzdata"),
+	)
+	if err != nil {
+		t.Fatalf("Plan() error: %v", err)
+	}
+	last := p.Stages[len(p.Stages)-1]
+	want := "apk add --no-cache ca-certificates tzdata"
+	for _, s := range last.Steps {
+		if s.Type == core.StepRun && len(s.Args) > 0 && strings.Contains(s.Args[0], want) {
+			return // found
+		}
+	}
+	t.Errorf("runtime stage missing %q; steps: %v", want, last.Steps)
+}
+
+func TestRuntimeSystemDeps_Slim(t *testing.T) {
+	p, err := Plan(&goFW,
+		WithRuntimeImage("debian:bookworm-slim"),
+		WithRuntimeSystemDeps("ca-certificates", "tzdata"),
+	)
+	if err != nil {
+		t.Fatalf("Plan() error: %v", err)
+	}
+	last := p.Stages[len(p.Stages)-1]
+	want := "apt-get install -y --no-install-recommends ca-certificates tzdata"
+	for _, s := range last.Steps {
+		if s.Type == core.StepRun && len(s.Args) > 0 && strings.Contains(s.Args[0], want) {
+			return // found
+		}
+	}
+	t.Errorf("runtime stage missing apt install step containing %q; steps: %v", want, last.Steps)
+}
+
+func TestRuntimeSystemDeps_Distroless_Error(t *testing.T) {
+	// Default Go runtime is distroless — no image override needed.
+	_, err := Plan(&goFW,
+		WithRuntimeSystemDeps("ca-certificates"),
+	)
+	if err == nil {
+		t.Fatal("expected error for distroless runtime_config.system_deps, got nil")
+	}
+	if !strings.Contains(err.Error(), "distroless") {
+		t.Errorf("error should mention 'distroless', got: %v", err)
+	}
+}
+
+func TestRuntimeSystemDeps_NotInBuilderStage(t *testing.T) {
+	p, err := Plan(&goFW,
+		WithRuntimeImage("alpine:3.21"),
+		WithRuntimeSystemDeps("ca-certificates"),
+	)
+	if err != nil {
+		t.Fatalf("Plan() error: %v", err)
+	}
+	// Builder stage (first) must NOT contain the runtime apk step.
+	first := p.Stages[0]
+	for _, s := range first.Steps {
+		if s.Type == core.StepRun && len(s.Args) > 0 && strings.Contains(s.Args[0], "ca-certificates") {
+			t.Errorf("ca-certificates found in builder stage but should only be in runtime stage; args: %v", s.Args)
+		}
 	}
 }

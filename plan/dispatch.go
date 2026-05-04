@@ -65,7 +65,9 @@ func Plan(fw *core.Framework, opts ...PlanOption) (*core.BuildPlan, error) {
 			}
 			cfg.RuntimeImage = &img
 		}
-		applyPlanOverrides(plan, cfg)
+		if err = applyPlanOverrides(plan, cfg); err != nil {
+			return nil, err
+		}
 		if cfg.ContextRoot != nil {
 			applyContextRoot(plan, *cfg.ContextRoot)
 		}
@@ -96,9 +98,9 @@ func resolveRuntimeImageForFramework(fw *core.Framework, family string) (string,
 // applyPlanOverrides modifies the plan based on cfg.
 // The last stage is always the runtime stage across all plan builders.
 // The first stage is the deps/builder stage where install happens.
-func applyPlanOverrides(plan *core.BuildPlan, cfg *planConfig) {
+func applyPlanOverrides(plan *core.BuildPlan, cfg *planConfig) error {
 	if len(plan.Stages) == 0 {
-		return
+		return nil
 	}
 
 	first := &plan.Stages[0]
@@ -247,6 +249,14 @@ func applyPlanOverrides(plan *core.BuildPlan, cfg *planConfig) {
 	if len(cfg.ExternalTools) > 0 {
 		applyExternalTools(plan, cfg.ExternalTools)
 	}
+
+	if len(cfg.RuntimeSystemDeps) > 0 {
+		if err := applyRuntimeSystemDeps(last, cfg.RuntimeSystemDeps); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // applySecrets attaches secret mounts to RUN steps in install/build stages.
@@ -332,6 +342,42 @@ func insertSystemDepsStep(stage *core.Stage, deps []string) {
 		}
 	}
 	stage.Steps = append(stage.Steps[:insertIdx], append([]core.Step{sysStep}, stage.Steps[insertIdx:]...)...)
+}
+
+// applyRuntimeSystemDeps installs packages in the runtime stage.
+// It detects the package manager from the stage's base image:
+//   - alpine  → apk add --no-cache
+//   - slim/debian → apt-get install
+//   - distroless → error (no package manager)
+//
+// Deps are sanitized to reject shell metacharacters before use.
+func applyRuntimeSystemDeps(stage *core.Stage, deps []string) error {
+	safe := sanitizeSysDeps(deps)
+	if len(safe) == 0 {
+		return nil
+	}
+	if strings.Contains(stage.From, "distroless") {
+		return fmt.Errorf("runtime_config.system_deps: distroless images have no package manager; cannot install %v", safe)
+	}
+	depList := strings.Join(safe, " ")
+	var cmd string
+	if strings.Contains(stage.From, "alpine") {
+		cmd = "apk add --no-cache " + depList
+	} else {
+		cmd = "apt-get update -qq && apt-get install -y --no-install-recommends " + depList + " && rm -rf /var/lib/apt/lists/*"
+	}
+	sysStep := core.Step{Type: core.StepRun, Args: []string{cmd}}
+	// Insert after FROM / any initial ENV/ARG steps, before the first COPY or RUN.
+	insertIdx := 0
+	for i, s := range stage.Steps {
+		if s.Type == core.StepEnv || s.Type == core.StepArg {
+			insertIdx = i + 1
+		} else {
+			break
+		}
+	}
+	stage.Steps = append(stage.Steps[:insertIdx], append([]core.Step{sysStep}, stage.Steps[insertIdx:]...)...)
+	return nil
 }
 
 // findStageByName returns a pointer to the named stage, or nil.

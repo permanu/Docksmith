@@ -148,6 +148,7 @@ var (
 	WithBuildCommand        = plan.WithBuildCommand
 	WithStartCommand        = plan.WithStartCommand
 	WithSystemDeps          = plan.WithSystemDeps
+	WithRuntimeSystemDeps   = plan.WithRuntimeSystemDeps
 	WithBuildCacheDisabled  = plan.WithBuildCacheDisabled
 	WithSecrets             = plan.WithSecrets
 	WithContextRoot         = plan.WithContextRoot
@@ -448,6 +449,9 @@ func ConfigToPlanOptions(c *Config) ([]PlanOption, error) {
 	}
 	if len(c.Install.SystemDeps) > 0 {
 		opts = append(opts, WithSystemDeps(c.Install.SystemDeps...))
+	}
+	if len(c.RuntimeConfig.SystemDeps) > 0 {
+		opts = append(opts, WithRuntimeSystemDeps(c.RuntimeConfig.SystemDeps...))
 	}
 	if len(c.Env) > 0 {
 		opts = append(opts, WithExtraEnv(c.Env))

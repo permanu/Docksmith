@@ -95,3 +95,52 @@ func TestHealthcheckOpts_ValidateErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestRuntimeConfig_SystemDeps_ParseTOML(t *testing.T) {
+	data := []byte(`
+runtime = "go"
+[start]
+command = "./server"
+[runtime_config]
+image = "alpine:3.21"
+system_deps = ["ca-certificates", "tzdata"]
+`)
+	cfg, err := ParseConfig("docksmith.toml", data)
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
+	want := []string{"ca-certificates", "tzdata"}
+	if len(cfg.RuntimeConfig.SystemDeps) != len(want) {
+		t.Fatalf("SystemDeps = %v, want %v", cfg.RuntimeConfig.SystemDeps, want)
+	}
+	for i, dep := range want {
+		if cfg.RuntimeConfig.SystemDeps[i] != dep {
+			t.Errorf("SystemDeps[%d] = %q, want %q", i, cfg.RuntimeConfig.SystemDeps[i], dep)
+		}
+	}
+}
+
+func TestRuntimeConfig_SystemDeps_ParseYAML(t *testing.T) {
+	data := []byte("runtime: go\nstart:\n  command: ./server\nruntime_config:\n  image: alpine:3.21\n  system_deps:\n    - ca-certificates\n    - tzdata\n")
+	cfg, err := ParseConfig("docksmith.yaml", data)
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
+	if len(cfg.RuntimeConfig.SystemDeps) != 2 || cfg.RuntimeConfig.SystemDeps[0] != "ca-certificates" {
+		t.Errorf("SystemDeps = %v, want [ca-certificates tzdata]", cfg.RuntimeConfig.SystemDeps)
+	}
+}
+
+func TestRuntimeConfig_SystemDeps_InvalidPackageName(t *testing.T) {
+	data := []byte(`
+runtime = "go"
+[start]
+command = "./server"
+[runtime_config]
+system_deps = ["ca-certificates; rm -rf /"]
+`)
+	_, err := ParseConfig("docksmith.toml", data)
+	if err == nil {
+		t.Fatal("expected error for invalid package name with shell metacharacter, got nil")
+	}
+}

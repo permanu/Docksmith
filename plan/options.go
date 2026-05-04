@@ -11,27 +11,28 @@ import (
 // A nil pointer means "not set — use default". A non-nil pointer (even &"")
 // means "explicitly set — use this value, possibly disabling the feature".
 type PlanConfig struct {
-	User             *string
-	Healthcheck      *string
-	HealthcheckOpts  *config.HealthcheckOpts
-	RuntimeImage     *string
-	BaseImage        *string
-	ImageFamily      string // "alpine", "slim", or "distroless"; empty = use runtime default
-	Entrypoint       []string
-	ExtraEnv         map[string]string
-	Expose           *int
-	InstallCmd       *string
-	BuildCmd         *string
-	StartCmd         *string
-	SystemDeps       []string
-	NoBuildCache     bool
-	Secrets          []core.SecretMount
-	ContextRoot      *string
-	LdFlags          map[string]string
-	EntrypointScript string // path relative to build context; empty = not set
-	RuntimeAssets    []core.AssetCopy
-	ExternalTools    []config.ExternalTool
-	Binaries         []config.Binary
+	User              *string
+	Healthcheck       *string
+	HealthcheckOpts   *config.HealthcheckOpts
+	RuntimeImage      *string
+	BaseImage         *string
+	ImageFamily       string // "alpine", "slim", or "distroless"; empty = use runtime default
+	Entrypoint        []string
+	ExtraEnv          map[string]string
+	Expose            *int
+	InstallCmd        *string
+	BuildCmd          *string
+	StartCmd          *string
+	SystemDeps        []string
+	RuntimeSystemDeps []string // packages to install in the runtime stage (not the builder)
+	NoBuildCache      bool
+	Secrets           []core.SecretMount
+	ContextRoot       *string
+	LdFlags           map[string]string
+	EntrypointScript  string // path relative to build context; empty = not set
+	RuntimeAssets     []core.AssetCopy
+	ExternalTools     []config.ExternalTool
+	Binaries          []config.Binary
 }
 
 // planConfig is an internal alias kept for transition clarity.
@@ -133,6 +134,13 @@ func WithStartCommand(cmd string) PlanOption {
 
 func WithSystemDeps(deps ...string) PlanOption {
 	return planOptionFunc(func(c *planConfig) { c.SystemDeps = deps })
+}
+
+// WithRuntimeSystemDeps installs packages in the runtime stage via the stage's
+// native package manager (apk for alpine, apt-get for slim/debian).
+// Distroless images have no package manager — an error is returned at plan time.
+func WithRuntimeSystemDeps(deps ...string) PlanOption {
+	return planOptionFunc(func(c *planConfig) { c.RuntimeSystemDeps = deps })
 }
 
 func WithBuildCacheDisabled() PlanOption {
