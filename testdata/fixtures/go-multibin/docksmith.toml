@@ -1,0 +1,12 @@
+runtime = "go"
+
+[start]
+command = "/usr/local/bin/server"
+
+[[build.binaries]]
+name = "server"
+path = "./cmd/server"
+
+[[build.binaries]]
+name = "worker"
+path = "./cmd/worker"

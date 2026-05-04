@@ -46,11 +46,20 @@ type Config struct {
 	ExternalTools  []ExternalTool          `toml:"external_tools"   yaml:"external_tools"   json:"external_tools,omitempty"`
 }
 
+// Binary describes a single Go binary to build in a multi-binary project.
+type Binary struct {
+	Name       string   `toml:"name"         yaml:"name"         json:"name"`
+	Path       string   `toml:"path"         yaml:"path"         json:"path"`
+	OutputName string   `toml:"output_name"  yaml:"output_name"  json:"output_name,omitempty"`
+	BuildFlags []string `toml:"build_flags"  yaml:"build_flags"  json:"build_flags,omitempty"`
+}
+
 // BuildConfig groups build-time overrides.
 type BuildConfig struct {
-	Command string            `toml:"command"   yaml:"command"   json:"command,omitempty"`
-	NoCache bool              `toml:"no_cache"  yaml:"no_cache"  json:"no_cache,omitempty"`
-	LdFlags map[string]string `toml:"ldflags"   yaml:"ldflags"   json:"ldflags,omitempty"`
+	Command  string            `toml:"command"    yaml:"command"    json:"command,omitempty"`
+	NoCache  bool              `toml:"no_cache"   yaml:"no_cache"   json:"no_cache,omitempty"`
+	LdFlags  map[string]string `toml:"ldflags"    yaml:"ldflags"    json:"ldflags,omitempty"`
+	Binaries []Binary          `toml:"binaries"   yaml:"binaries"   json:"binaries,omitempty"`
 }
 
 // StartConfig groups start-time overrides.
@@ -285,6 +294,9 @@ func (c *Config) Validate() error {
 	if err := c.validateLdFlags(); err != nil {
 		return err
 	}
+	if err := c.validateBinaries(); err != nil {
+		return err
+	}
 	if err := c.validateEntrypointScript(); err != nil {
 		return err
 	}
@@ -307,6 +319,32 @@ func (c *Config) validateLdFlags() error {
 		if strings.ContainsAny(v, "\"\n") {
 			return fmt.Errorf("build.ldflags: value for key %q must not contain '\"' or newline", k)
 		}
+	}
+	return nil
+}
+
+func (c *Config) validateBinaries() error {
+	seen := make(map[string]bool, len(c.Build.Binaries))
+	for i, b := range c.Build.Binaries {
+		if !reBinaryName.MatchString(b.Name) {
+			return fmt.Errorf("build.binaries[%d].name %q: must match ^[a-z][a-z0-9_-]*$", i, b.Name)
+		}
+		if b.Path == "" {
+			return fmt.Errorf("build.binaries[%d] %q: path must not be empty", i, b.Name)
+		}
+		if containsDotDot(b.Path) {
+			return fmt.Errorf("build.binaries[%d] %q: path must not contain '..'", i, b.Name)
+		}
+		if !strings.HasPrefix(b.Path, "./") && !strings.HasPrefix(b.Path, "/") {
+			return fmt.Errorf("build.binaries[%d] %q: path must start with './' or '/'", i, b.Name)
+		}
+		if b.OutputName != "" && !reBinaryName.MatchString(b.OutputName) {
+			return fmt.Errorf("build.binaries[%d] %q: output_name %q must match ^[a-z][a-z0-9_-]*$", i, b.Name, b.OutputName)
+		}
+		if seen[b.Name] {
+			return fmt.Errorf("build.binaries: duplicate name %q", b.Name)
+		}
+		seen[b.Name] = true
 	}
 	return nil
 }
@@ -359,8 +397,9 @@ func (c *Config) validateSecrets() error {
 }
 
 var (
-	reToolName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
-	reSHA256   = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	reToolName   = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	reSHA256     = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	reBinaryName = reToolName // same rule: ^[a-z][a-z0-9_-]*$
 )
 
 func (c *Config) validateExternalTools() error {

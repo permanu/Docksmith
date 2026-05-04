@@ -30,6 +30,7 @@ type PlanConfig struct {
 	EntrypointScript string // path relative to build context; empty = not set
 	RuntimeAssets    []core.AssetCopy
 	ExternalTools    []config.ExternalTool
+	Binaries         []config.Binary
 }
 
 // planConfig is an internal alias kept for transition clarity.
@@ -161,6 +162,12 @@ func WithRuntimeAssets(assets []core.AssetCopy) PlanOption {
 // WithExternalTools adds versioned tool fetch steps to the plan.
 func WithExternalTools(tools []config.ExternalTool) PlanOption {
 	return planOptionFunc(func(c *planConfig) { c.ExternalTools = tools })
+}
+
+// WithBinaries sets Go multi-binary build configuration.
+// Only honoured by the Go plan builder; ignored for all other runtimes.
+func WithBinaries(bins []config.Binary) PlanOption {
+	return planOptionFunc(func(c *planConfig) { c.Binaries = bins })
 }
 
 // ResolvePlanConfig resolves a slice of PlanOption into a PlanConfig.
