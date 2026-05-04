@@ -20,6 +20,15 @@ type AssetCopy struct {
 	Dst string `toml:"dst" yaml:"dst" json:"dst"`
 }
 
+// ExternalTool describes a versioned binary to fetch and verify during the build.
+type ExternalTool struct {
+	Name        string `toml:"name"         yaml:"name"         json:"name"`
+	URL         string `toml:"url"          yaml:"url"          json:"url"`    // may contain ${TARGETARCH}
+	SHA256      string `toml:"sha256"       yaml:"sha256"       json:"sha256"` // 64 hex chars
+	InstallPath string `toml:"install_path" yaml:"install_path" json:"install_path"`
+	Stage       string `toml:"stage"        yaml:"stage"        json:"stage"` // "builder" or "runtime", default "runtime"
+}
+
 // Config represents a user-provided docksmith.toml/yaml/json configuration.
 type Config struct {
 	Runtime        string                  `toml:"runtime"          yaml:"runtime"          json:"runtime"`
@@ -34,6 +43,7 @@ type Config struct {
 	RuntimeConfig  RuntimeCfg              `toml:"runtime_config"   yaml:"runtime_config"   json:"runtime_config,omitempty"`
 	Secrets        map[string]SecretConfig `toml:"secrets"          yaml:"secrets"          json:"secrets,omitempty"`
 	RuntimeAssets  []AssetCopy             `toml:"runtime_assets"   yaml:"runtime_assets"   json:"runtime_assets,omitempty"`
+	ExternalTools  []ExternalTool          `toml:"external_tools"   yaml:"external_tools"   json:"external_tools,omitempty"`
 }
 
 // BuildConfig groups build-time overrides.
@@ -207,6 +217,7 @@ type rawConfig struct {
 	RuntimeConfig  rawRuntimeCfg           `toml:"runtime_config"  yaml:"runtime_config"  json:"runtime_config,omitempty"`
 	Secrets        map[string]SecretConfig `toml:"secrets"         yaml:"secrets"         json:"secrets,omitempty"`
 	RuntimeAssets  []AssetCopy             `toml:"runtime_assets"  yaml:"runtime_assets"  json:"runtime_assets,omitempty"`
+	ExternalTools  []ExternalTool          `toml:"external_tools"  yaml:"external_tools"  json:"external_tools,omitempty"`
 }
 
 // ParseConfig parses raw config data based on the file extension in name.
@@ -253,6 +264,7 @@ func ParseConfig(name string, data []byte) (*Config, error) {
 		RuntimeConfig:  rc,
 		Secrets:        raw.Secrets,
 		RuntimeAssets:  raw.RuntimeAssets,
+		ExternalTools:  raw.ExternalTools,
 	}, nil
 }
 
@@ -279,7 +291,10 @@ func (c *Config) Validate() error {
 	if err := c.validateRuntimeAssets(); err != nil {
 		return err
 	}
-	return c.validateSecrets()
+	if err := c.validateSecrets(); err != nil {
+		return err
+	}
+	return c.validateExternalTools()
 }
 
 var ldflagsKeyRE = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_./]*$`)
@@ -338,6 +353,32 @@ func (c *Config) validateSecrets() error {
 		}
 		if sec.Target != "" && strings.Contains(sec.Target, "..") {
 			return fmt.Errorf("secrets.%s: target path must not contain '..'", id)
+		}
+	}
+	return nil
+}
+
+var (
+	reToolName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	reSHA256   = regexp.MustCompile(`^[0-9a-f]{64}$`)
+)
+
+func (c *Config) validateExternalTools() error {
+	for i, t := range c.ExternalTools {
+		if !reToolName.MatchString(t.Name) {
+			return fmt.Errorf("external_tools[%d].name %q: must match ^[a-z][a-z0-9_-]*$", i, t.Name)
+		}
+		if !strings.HasPrefix(t.URL, "https://") {
+			return fmt.Errorf("external_tools[%d] %q: url must start with https://", i, t.Name)
+		}
+		if !reSHA256.MatchString(t.SHA256) {
+			return fmt.Errorf("external_tools[%d] %q: sha256 must be 64 lowercase hex chars", i, t.Name)
+		}
+		if !filepath.IsAbs(t.InstallPath) {
+			return fmt.Errorf("external_tools[%d] %q: install_path must be absolute", i, t.Name)
+		}
+		if t.Stage != "" && t.Stage != "builder" && t.Stage != "runtime" {
+			return fmt.Errorf("external_tools[%d] %q: stage must be \"builder\" or \"runtime\"", i, t.Name)
 		}
 	}
 	return nil

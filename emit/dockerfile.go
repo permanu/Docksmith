@@ -6,6 +6,7 @@ package emit
 import (
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"strings"
 
 	"github.com/permanu/docksmith/core"
@@ -131,7 +132,34 @@ func writeStep(b *strings.Builder, step core.Step) {
 	case core.StepHealthcheck:
 		cmd := SanitizeDockerfileArg(strings.Join(step.Args, " "))
 		fmt.Fprintf(b, "HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD %s\n", cmd)
+
+	case core.StepFetchTool:
+		if len(step.Args) == 4 {
+			fmt.Fprintf(b, "RUN %s\n", fetchToolRun(step.Args[0], step.Args[1], step.Args[2], step.Args[3]))
+		}
 	}
+}
+
+// fetchToolRun builds the multi-line shell command for a StepFetchTool step.
+func fetchToolRun(name, url, sha256, installPath string) string {
+	base := filepath.Base(url)
+	ext := ".tar.gz"
+	if strings.HasSuffix(base, ".zip") {
+		ext = ".zip"
+	}
+	archive := fmt.Sprintf("/tmp/%s%s", name, ext)
+
+	lines := []string{
+		`set -eux; \`,
+		`  arch="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"; \`,
+		fmt.Sprintf(`  url="%s"; \`, url),
+		fmt.Sprintf(`  curl -fsSL -o %s "$url"; \`, archive),
+		fmt.Sprintf(`  echo "%s  %s" | sha256sum -c -; \`, sha256, archive),
+		fmt.Sprintf(`  mkdir -p %s; \`, installPath),
+		fmt.Sprintf(`  tar -xzf %s -C %s; \`, archive, installPath),
+		fmt.Sprintf(`  rm %s`, archive),
+	}
+	return strings.Join(lines, "\n")
 }
 
 func writeRun(b *strings.Builder, step core.Step) {

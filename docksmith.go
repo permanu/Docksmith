@@ -57,6 +57,7 @@ type InstallConfig = config.InstallConfig
 type RuntimeCfg = config.RuntimeCfg
 type SecretConfig = config.SecretConfig
 type ConfigAssetCopy = config.AssetCopy
+type ExternalTool = config.ExternalTool
 
 // Detect types
 type NamedDetector = detect.NamedDetector
@@ -150,6 +151,7 @@ var (
 	WithLdFlags             = plan.WithLdFlags
 	WithImageFamily         = plan.WithImageFamily
 	WithRuntimeAssets       = plan.WithRuntimeAssets
+	WithExternalTools       = plan.WithExternalTools
 )
 
 var ResolveDockerTag = plan.ResolveDockerTag
@@ -484,6 +486,10 @@ func ConfigToPlanOptions(c *Config) ([]PlanOption, error) {
 			assets[i] = core.AssetCopy{Src: a.Src, Dst: a.Dst}
 		}
 		opts = append(opts, WithRuntimeAssets(assets))
+	}
+
+	if len(c.ExternalTools) > 0 {
+		opts = append(opts, WithExternalTools(c.ExternalTools))
 	}
 
 	return opts, nil

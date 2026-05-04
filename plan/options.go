@@ -3,6 +3,7 @@ package plan
 import (
 	"strings"
 
+	"github.com/permanu/docksmith/config"
 	"github.com/permanu/docksmith/core"
 )
 
@@ -28,6 +29,7 @@ type PlanConfig struct {
 	LdFlags          map[string]string
 	EntrypointScript string // path relative to build context; empty = not set
 	RuntimeAssets    []core.AssetCopy
+	ExternalTools    []config.ExternalTool
 }
 
 // planConfig is an internal alias kept for transition clarity.
@@ -154,6 +156,11 @@ func WithImageFamily(family string) PlanOption {
 // WithRuntimeAssets appends COPY <src> <dst> steps into the runtime stage.
 func WithRuntimeAssets(assets []core.AssetCopy) PlanOption {
 	return planOptionFunc(func(c *planConfig) { c.RuntimeAssets = assets })
+}
+
+// WithExternalTools adds versioned tool fetch steps to the plan.
+func WithExternalTools(tools []config.ExternalTool) PlanOption {
+	return planOptionFunc(func(c *planConfig) { c.ExternalTools = tools })
 }
 
 // ResolvePlanConfig resolves a slice of PlanOption into a PlanConfig.
