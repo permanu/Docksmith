@@ -16,8 +16,9 @@ import (
 
 // AssetCopy describes a file or directory to copy into the runtime stage.
 type AssetCopy struct {
-	Src string `toml:"src" yaml:"src" json:"src"`
-	Dst string `toml:"dst" yaml:"dst" json:"dst"`
+	Src   string `toml:"src"   yaml:"src"   json:"src"`
+	Dst   string `toml:"dst"   yaml:"dst"   json:"dst"`
+	Chown string `toml:"chown" yaml:"chown" json:"chown,omitempty"` // optional, e.g. "permanu:permanu" or "1000:1000"
 }
 
 // ExternalTool describes a versioned binary to fetch and verify during the build.
@@ -137,6 +138,9 @@ var validImageFamilies = map[string]bool{
 }
 
 var reDuration = regexp.MustCompile(`^\d+(ms|s|m|h)$`)
+
+// reChown matches valid --chown values: name[:name] or uid[:gid].
+var reChown = regexp.MustCompile(`^[a-zA-Z0-9_-]+(:[a-zA-Z0-9_-]+)?$|^\d+(:\d+)?$`)
 
 // validate checks HealthcheckOpts field constraints.
 func (h HealthcheckOpts) validate() error {
@@ -437,6 +441,9 @@ func (c *Config) validateRuntimeAssets() error {
 		}
 		if !filepath.IsAbs(a.Dst) {
 			return fmt.Errorf("runtime_assets[%d]: dst must be an absolute path", i)
+		}
+		if a.Chown != "" && !reChown.MatchString(a.Chown) {
+			return fmt.Errorf("runtime_assets[%d]: chown %q must match ^[a-zA-Z0-9_-]+(:[a-zA-Z0-9_-]+)?$ or ^\\d+(:\\d+)?$", i, a.Chown)
 		}
 	}
 	return nil
