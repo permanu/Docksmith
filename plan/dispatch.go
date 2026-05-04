@@ -413,16 +413,27 @@ func applyBinaries(plan *core.BuildPlan, bins []config.Binary, setCmd bool) {
 	newBuilderSteps := make([]core.Step, 0, len(builder.Steps)+len(bins))
 	for _, step := range builder.Steps {
 		if step.Type == core.StepRun && len(step.Args) > 0 && strings.Contains(step.Args[0], "go build") {
-			// Replace this single-binary build step with one step per binary.
+			// Replace this single-binary build step with one step per binary (and per arch).
 			for _, b := range bins {
 				outName := b.OutputName
 				if outName == "" {
 					outName = b.Name
 				}
-				newBuilderSteps = append(newBuilderSteps, core.Step{
-					Type: core.StepRun,
-					Args: []string{fmt.Sprintf(`CGO_ENABLED=0 go build -ldflags="-w -s" -o /out/%s %s`, outName, b.Path)},
-				})
+				if len(b.Architectures) == 0 {
+					// Single-arch build (unchanged behavior from cap 7).
+					newBuilderSteps = append(newBuilderSteps, core.Step{
+						Type: core.StepRun,
+						Args: []string{fmt.Sprintf(`CGO_ENABLED=0 go build -ldflags="-w -s" -o /out/%s %s`, outName, b.Path)},
+					})
+				} else {
+					// Cross-arch: one RUN per GOARCH.
+					for _, arch := range b.Architectures {
+						newBuilderSteps = append(newBuilderSteps, core.Step{
+							Type: core.StepRun,
+							Args: []string{fmt.Sprintf(`CGO_ENABLED=0 GOOS=linux GOARCH=%s go build -ldflags="-w -s" -o /out/%s-%s %s`, arch, outName, arch, b.Path)},
+						})
+					}
+				}
 			}
 		} else {
 			newBuilderSteps = append(newBuilderSteps, step)
@@ -434,16 +445,25 @@ func applyBinaries(plan *core.BuildPlan, bins []config.Binary, setCmd bool) {
 	newRuntimeSteps := make([]core.Step, 0, len(runtime.Steps)+len(bins))
 	for _, step := range runtime.Steps {
 		if step.Type == core.StepCopyFrom && step.CopyFrom != nil && step.CopyFrom.Stage == "builder" {
-			// Replace with one COPY per binary, inserted here.
+			// Replace with one COPY per binary (and per arch).
 			for _, b := range bins {
 				outName := b.OutputName
 				if outName == "" {
 					outName = b.Name
 				}
-				newRuntimeSteps = append(newRuntimeSteps, core.Step{
-					Type:     core.StepCopyFrom,
-					CopyFrom: &core.CopyFrom{Stage: "builder", Src: fmt.Sprintf("/out/%s", outName), Dst: fmt.Sprintf("/usr/local/bin/%s", outName)},
-				})
+				if len(b.Architectures) == 0 {
+					newRuntimeSteps = append(newRuntimeSteps, core.Step{
+						Type:     core.StepCopyFrom,
+						CopyFrom: &core.CopyFrom{Stage: "builder", Src: fmt.Sprintf("/out/%s", outName), Dst: fmt.Sprintf("/usr/local/bin/%s", outName)},
+					})
+				} else {
+					for _, arch := range b.Architectures {
+						newRuntimeSteps = append(newRuntimeSteps, core.Step{
+							Type:     core.StepCopyFrom,
+							CopyFrom: &core.CopyFrom{Stage: "builder", Src: fmt.Sprintf("/out/%s-%s", outName, arch), Dst: fmt.Sprintf("/usr/local/bin/%s-%s", outName, arch)},
+						})
+					}
+				}
 			}
 		} else {
 			newRuntimeSteps = append(newRuntimeSteps, step)
@@ -453,9 +473,13 @@ func applyBinaries(plan *core.BuildPlan, bins []config.Binary, setCmd bool) {
 
 	if setCmd {
 		// No StartCmd override: set CMD to first binary's output name.
+		// If the first binary has cross-arch targets, use the first listed arch.
 		firstOutName := bins[0].OutputName
 		if firstOutName == "" {
 			firstOutName = bins[0].Name
+		}
+		if len(bins[0].Architectures) > 0 {
+			firstOutName = fmt.Sprintf("%s-%s", firstOutName, bins[0].Architectures[0])
 		}
 		removeSteps(runtime, core.StepCmd)
 		runtime.Steps = append(runtime.Steps, core.Step{

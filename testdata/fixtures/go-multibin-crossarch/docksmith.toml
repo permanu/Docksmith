@@ -1,0 +1,13 @@
+runtime = "go"
+
+[start]
+command = "/usr/local/bin/permanu-agent-amd64"
+
+[[build.binaries]]
+name = "permanu-agent"
+path = "./cmd/agent"
+architectures = ["amd64", "arm64"]
+
+[[build.binaries]]
+name = "worker"
+path = "./cmd/worker"
