@@ -127,3 +127,27 @@ func TestBuildWithOptions_customConfig(t *testing.T) {
 		t.Fatal("expected non-empty Dockerfile")
 	}
 }
+
+// TestBuild_goPermanuBE verifies that the go-permanu-be fixture detects as Go,
+// and that the custom healthcheck from docksmith.toml appears verbatim in the
+// emitted Dockerfile. This is Phase 0 cap 1 of the Permanu master plan.
+func TestBuild_goPermanuBE_HealthcheckOverride(t *testing.T) {
+	const fixturePath = "../../testdata/fixtures/go-permanu-be"
+	const wantHealthcheck = "HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD wget --spider -q http://localhost:4290/api/health || exit 1"
+
+	planOpts, err := docksmith.LoadPlanOptions(fixturePath)
+	if err != nil {
+		t.Fatalf("LoadPlanOptions: %v", err)
+	}
+
+	dockerfile, fw, err := docksmith.BuildWithOptions(fixturePath, docksmith.DetectOptions{}, planOpts...)
+	if err != nil {
+		t.Fatalf("BuildWithOptions: %v", err)
+	}
+	if fw == nil || !strings.HasPrefix(fw.Name, "go") {
+		t.Fatalf("want go framework, got %v", fw)
+	}
+	if !strings.Contains(dockerfile, wantHealthcheck) {
+		t.Errorf("expected Dockerfile to contain:\n  %q\ngot:\n%s", wantHealthcheck, dockerfile)
+	}
+}

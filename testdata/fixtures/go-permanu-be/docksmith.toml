@@ -1,0 +1,12 @@
+runtime = "go"
+version = "1.23"
+
+[build]
+command = "go build -o /app/server ./cmd/server"
+
+[start]
+command = "./server"
+
+[runtime_config]
+expose = 4290
+healthcheck = "wget --spider -q http://localhost:4290/api/health || exit 1"
