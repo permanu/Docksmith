@@ -20,6 +20,7 @@ const (
 	StepEntrypoint
 	StepUser
 	StepHealthcheck
+	StepFetchTool
 )
 
 // BuildPlan is the complete abstract build description produced by Layer 2

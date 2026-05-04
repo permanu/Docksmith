@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/permanu/docksmith/config"
 	"github.com/permanu/docksmith/core"
 )
 
@@ -213,6 +214,10 @@ func applyPlanOverrides(plan *core.BuildPlan, cfg *planConfig) {
 	if len(cfg.RuntimeAssets) > 0 {
 		applyRuntimeAssets(last, cfg.RuntimeAssets)
 	}
+
+	if len(cfg.ExternalTools) > 0 {
+		applyExternalTools(plan, cfg.ExternalTools)
+	}
 }
 
 // applySecrets attaches secret mounts to RUN steps in install/build stages.
@@ -372,6 +377,28 @@ func applyLdFlags(plan *core.BuildPlan, flags map[string]string) {
 				step.Args[k] = strings.Replace(arg, `-ldflags="-w -s"`, fmt.Sprintf(`-ldflags="-w -s%s"`, suffix), 1)
 				return
 			}
+		}
+	}
+}
+
+// applyExternalTools injects StepFetchTool steps into the appropriate stage.
+// "builder" tools go into the first stage; "runtime" (default) go into the last.
+func applyExternalTools(plan *core.BuildPlan, tools []config.ExternalTool) {
+	if len(plan.Stages) == 0 {
+		return
+	}
+	first := &plan.Stages[0]
+	last := &plan.Stages[len(plan.Stages)-1]
+
+	for _, t := range tools {
+		step := core.Step{
+			Type: core.StepFetchTool,
+			Args: []string{t.Name, t.URL, t.SHA256, t.InstallPath},
+		}
+		if t.Stage == "builder" {
+			first.Steps = append(first.Steps, step)
+		} else {
+			last.Steps = append(last.Steps, step)
 		}
 	}
 }
