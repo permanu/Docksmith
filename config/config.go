@@ -48,10 +48,10 @@ type Config struct {
 
 // Binary describes a single Go binary to build in a multi-binary project.
 type Binary struct {
-	Name        string   `toml:"name"         yaml:"name"         json:"name"`
-	Path        string   `toml:"path"         yaml:"path"         json:"path"`
-	OutputName  string   `toml:"output_name"  yaml:"output_name"  json:"output_name,omitempty"`
-	BuildFlags  []string `toml:"build_flags"  yaml:"build_flags"  json:"build_flags,omitempty"`
+	Name       string   `toml:"name"         yaml:"name"         json:"name"`
+	Path       string   `toml:"path"         yaml:"path"         json:"path"`
+	OutputName string   `toml:"output_name"  yaml:"output_name"  json:"output_name,omitempty"`
+	BuildFlags []string `toml:"build_flags"  yaml:"build_flags"  json:"build_flags,omitempty"`
 }
 
 // BuildConfig groups build-time overrides.
