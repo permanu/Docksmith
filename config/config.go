@@ -116,6 +116,7 @@ type RuntimeCfg struct {
 	Image           string          `toml:"image"             yaml:"image"             json:"image,omitempty"`
 	Expose          int             `toml:"expose"            yaml:"expose"            json:"expose,omitempty"`
 	ImageFamily     string          `toml:"image_family"      yaml:"image_family"      json:"image_family,omitempty"`
+	SystemDeps      []string        `toml:"system_deps"       yaml:"system_deps"       json:"system_deps,omitempty"`
 	HealthcheckOpts HealthcheckOpts `toml:"healthcheck_opts"  yaml:"healthcheck_opts"  json:"healthcheck_opts,omitempty"`
 	User            string          `toml:"-"                 yaml:"-"                 json:"-"`
 	UserSet         bool            `toml:"-"                 yaml:"-"                 json:"-"`
@@ -128,6 +129,7 @@ type rawRuntimeCfg struct {
 	Image           string          `toml:"image"             yaml:"image"             json:"image,omitempty"`
 	Expose          int             `toml:"expose"            yaml:"expose"            json:"expose,omitempty"`
 	ImageFamily     string          `toml:"image_family"      yaml:"image_family"      json:"image_family,omitempty"`
+	SystemDeps      []string        `toml:"system_deps"       yaml:"system_deps"       json:"system_deps,omitempty"`
 	HealthcheckOpts HealthcheckOpts `toml:"healthcheck_opts"  yaml:"healthcheck_opts"  json:"healthcheck_opts,omitempty"`
 	User            any             `toml:"user"              yaml:"user"              json:"user,omitempty"`
 	Healthcheck     any             `toml:"healthcheck"       yaml:"healthcheck"       json:"healthcheck,omitempty"`
@@ -160,6 +162,9 @@ func (h HealthcheckOpts) validate() error {
 	return nil
 }
 
+// reSystemDep matches valid package names: alphanumeric, dash, dot, underscore, plus.
+var reSystemDep = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._+\-]*$`)
+
 func (r rawRuntimeCfg) normalize() (RuntimeCfg, error) {
 	if r.ImageFamily != "" && !validImageFamilies[r.ImageFamily] {
 		return RuntimeCfg{}, fmt.Errorf("runtime_config.image_family %q is not valid; must be one of: alpine, slim, distroless", r.ImageFamily)
@@ -167,7 +172,12 @@ func (r rawRuntimeCfg) normalize() (RuntimeCfg, error) {
 	if err := r.HealthcheckOpts.validate(); err != nil {
 		return RuntimeCfg{}, err
 	}
-	cfg := RuntimeCfg{Image: r.Image, Expose: r.Expose, ImageFamily: r.ImageFamily, HealthcheckOpts: r.HealthcheckOpts}
+	for i, dep := range r.SystemDeps {
+		if !reSystemDep.MatchString(dep) {
+			return RuntimeCfg{}, fmt.Errorf("runtime_config.system_deps[%d] %q: invalid package name (alphanumeric, dash, dot, underscore, plus only)", i, dep)
+		}
+	}
+	cfg := RuntimeCfg{Image: r.Image, Expose: r.Expose, ImageFamily: r.ImageFamily, SystemDeps: r.SystemDeps, HealthcheckOpts: r.HealthcheckOpts}
 	if r.User != nil {
 		switch v := r.User.(type) {
 		case bool:
