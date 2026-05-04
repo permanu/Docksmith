@@ -209,6 +209,10 @@ func applyPlanOverrides(plan *core.BuildPlan, cfg *planConfig) {
 	if len(cfg.LdFlags) > 0 {
 		applyLdFlags(plan, cfg.LdFlags)
 	}
+
+	if len(cfg.RuntimeAssets) > 0 {
+		applyRuntimeAssets(last, cfg.RuntimeAssets)
+	}
 }
 
 // applySecrets attaches secret mounts to RUN steps in install/build stages.
@@ -227,6 +231,25 @@ func applySecrets(plan *core.BuildPlan, secrets []core.SecretMount) {
 			stage.Steps[j].SecretMounts = mergeSecrets(stage.Steps[j].SecretMounts, secrets)
 		}
 	}
+}
+
+// applyRuntimeAssets inserts COPY steps for user-declared assets into the
+// runtime stage. Steps are inserted before any CMD/ENTRYPOINT directive so
+// that framework defaults (CopyFrom steps) remain ahead of user copies.
+func applyRuntimeAssets(stage *core.Stage, assets []core.AssetCopy) {
+	// Find insertion point: before first CMD or ENTRYPOINT step.
+	insertIdx := len(stage.Steps)
+	for i, s := range stage.Steps {
+		if s.Type == core.StepCmd || s.Type == core.StepEntrypoint {
+			insertIdx = i
+			break
+		}
+	}
+	copies := make([]core.Step, len(assets))
+	for i, a := range assets {
+		copies[i] = core.Step{Type: core.StepCopy, Args: []string{a.Src, a.Dst}}
+	}
+	stage.Steps = append(stage.Steps[:insertIdx], append(copies, stage.Steps[insertIdx:]...)...)
 }
 
 func mergeSecrets(existing, incoming []core.SecretMount) []core.SecretMount {
