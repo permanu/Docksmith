@@ -63,7 +63,7 @@ func planElixir(fw *core.Framework) (*core.BuildPlan, error) {
 	}
 
 	addNonRootUser(&runtime, "")
-	addHealthcheck(&runtime, "elixir", port)
+	addHealthcheck(&runtime, "elixir", port, nil)
 
 	return &core.BuildPlan{
 		Framework:    fw.Name,

@@ -170,7 +170,31 @@ func applyPlanOverrides(plan *core.BuildPlan, cfg *planConfig) {
 	if cfg.Healthcheck != nil {
 		removeSteps(last, core.StepHealthcheck)
 		if *cfg.Healthcheck != "" {
-			last.Steps = append(last.Steps, core.Step{Type: core.StepHealthcheck, Args: []string{*cfg.Healthcheck}})
+			step := core.Step{Type: core.StepHealthcheck, Args: []string{*cfg.Healthcheck}}
+			if cfg.HealthcheckOpts != nil {
+				o := core.HealthcheckOpts{
+					Interval:    cfg.HealthcheckOpts.Interval,
+					Timeout:     cfg.HealthcheckOpts.Timeout,
+					StartPeriod: cfg.HealthcheckOpts.StartPeriod,
+					Retries:     cfg.HealthcheckOpts.Retries,
+				}
+				step.HealthcheckOpts = &o
+			}
+			last.Steps = append(last.Steps, step)
+		}
+	} else if cfg.HealthcheckOpts != nil {
+		// Only opts set — update the opts on any existing HEALTHCHECK step in place.
+		for i := range last.Steps {
+			if last.Steps[i].Type == core.StepHealthcheck {
+				o := core.HealthcheckOpts{
+					Interval:    cfg.HealthcheckOpts.Interval,
+					Timeout:     cfg.HealthcheckOpts.Timeout,
+					StartPeriod: cfg.HealthcheckOpts.StartPeriod,
+					Retries:     cfg.HealthcheckOpts.Retries,
+				}
+				last.Steps[i].HealthcheckOpts = &o
+				break
+			}
 		}
 	}
 

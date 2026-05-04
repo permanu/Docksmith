@@ -32,7 +32,7 @@ func planStatic(fw *core.Framework) (*core.BuildPlan, error) {
 		},
 	})
 	addNonRootUser(&runtime, "nginx")
-	addHealthcheck(&runtime, "static", 80)
+	addHealthcheck(&runtime, "static", 80, nil)
 
 	return &core.BuildPlan{
 		Framework:    "static",

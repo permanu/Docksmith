@@ -73,7 +73,7 @@ func TestAddNonRootUser_CreatedRunContainsGroupAndUser(t *testing.T) {
 
 func TestAddHealthcheck_Node(t *testing.T) {
 	stage := &core.Stage{Name: "runtime", From: "node:22-alpine"}
-	addHealthcheck(stage, "node", 3000)
+	addHealthcheck(stage, "node", 3000, nil)
 
 	hc := findHealthcheck(stage)
 	if hc == nil {
@@ -89,7 +89,7 @@ func TestAddHealthcheck_Node(t *testing.T) {
 
 func TestAddHealthcheck_Python(t *testing.T) {
 	stage := &core.Stage{Name: "runtime", From: "python:3.12-slim"}
-	addHealthcheck(stage, "python", 8000)
+	addHealthcheck(stage, "python", 8000, nil)
 
 	hc := findHealthcheck(stage)
 	if hc == nil {
@@ -106,7 +106,7 @@ func TestAddHealthcheck_Python(t *testing.T) {
 func TestAddHealthcheck_Go(t *testing.T) {
 	// Go uses distroless — no shell, no healthcheck.
 	stage := &core.Stage{Name: "runtime", From: "gcr.io/distroless/static-debian12:nonroot"}
-	addHealthcheck(stage, "go", 8080)
+	addHealthcheck(stage, "go", 8080, nil)
 
 	if hc := findHealthcheck(stage); hc != nil {
 		t.Error("go runtime should not get a healthcheck (distroless)")
@@ -115,7 +115,7 @@ func TestAddHealthcheck_Go(t *testing.T) {
 
 func TestAddHealthcheck_Rust(t *testing.T) {
 	stage := &core.Stage{Name: "runtime", From: "gcr.io/distroless/cc-debian12:nonroot"}
-	addHealthcheck(stage, "rust", 8080)
+	addHealthcheck(stage, "rust", 8080, nil)
 
 	if hc := findHealthcheck(stage); hc != nil {
 		t.Error("rust runtime should not get a healthcheck (distroless)")
@@ -124,7 +124,7 @@ func TestAddHealthcheck_Rust(t *testing.T) {
 
 func TestAddHealthcheck_Static(t *testing.T) {
 	stage := &core.Stage{Name: "runtime", From: "nginx:alpine"}
-	addHealthcheck(stage, "static", 80)
+	addHealthcheck(stage, "static", 80, nil)
 
 	hc := findHealthcheck(stage)
 	if hc == nil {
@@ -140,7 +140,7 @@ func TestAddHealthcheck_Static(t *testing.T) {
 
 func TestAddHealthcheck_Bun(t *testing.T) {
 	stage := &core.Stage{Name: "runtime", From: "oven/bun:1"}
-	addHealthcheck(stage, "bun", 3000)
+	addHealthcheck(stage, "bun", 3000, nil)
 
 	hc := findHealthcheck(stage)
 	if hc == nil {
@@ -156,7 +156,7 @@ func TestAddHealthcheck_Bun(t *testing.T) {
 
 func TestAddHealthcheck_Deno(t *testing.T) {
 	stage := &core.Stage{Name: "runtime", From: "denoland/deno:latest"}
-	addHealthcheck(stage, "deno", 8000)
+	addHealthcheck(stage, "deno", 8000, nil)
 
 	hc := findHealthcheck(stage)
 	if hc == nil {
@@ -169,7 +169,7 @@ func TestAddHealthcheck_Deno(t *testing.T) {
 
 func TestAddHealthcheck_Ruby(t *testing.T) {
 	stage := &core.Stage{Name: "runtime", From: "ruby:3.3-slim"}
-	addHealthcheck(stage, "ruby", 3000)
+	addHealthcheck(stage, "ruby", 3000, nil)
 
 	hc := findHealthcheck(stage)
 	if hc == nil {
@@ -182,7 +182,7 @@ func TestAddHealthcheck_Ruby(t *testing.T) {
 
 func TestAddHealthcheck_Java(t *testing.T) {
 	stage := &core.Stage{Name: "runtime", From: "eclipse-temurin:21-jre-alpine"}
-	addHealthcheck(stage, "java", 8080)
+	addHealthcheck(stage, "java", 8080, nil)
 
 	hc := findHealthcheck(stage)
 	if hc == nil {

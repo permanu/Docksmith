@@ -13,6 +13,7 @@ import (
 type PlanConfig struct {
 	User             *string
 	Healthcheck      *string
+	HealthcheckOpts  *config.HealthcheckOpts
 	RuntimeImage     *string
 	BaseImage        *string
 	ImageFamily      string // "alpine", "slim", or "distroless"; empty = use runtime default
@@ -58,6 +59,12 @@ func WithHealthcheck(cmd string) PlanOption {
 func WithHealthcheckDisabled() PlanOption {
 	empty := ""
 	return planOptionFunc(func(c *planConfig) { c.Healthcheck = &empty })
+}
+
+// WithHealthcheckOpts overrides HEALTHCHECK timing parameters.
+// Zero-value fields retain the hardcoded defaults (30s/5s/10s, no retries flag).
+func WithHealthcheckOpts(opts config.HealthcheckOpts) PlanOption {
+	return planOptionFunc(func(c *planConfig) { c.HealthcheckOpts = &opts })
 }
 
 // WithRuntimeImage overrides the final stage's FROM (where the app runs).

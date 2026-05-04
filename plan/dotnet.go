@@ -67,7 +67,7 @@ func planDotnet(fw *core.Framework) (*core.BuildPlan, error) {
 		if expose <= 0 {
 			expose = 8080
 		}
-		addHealthcheck(&runtime, "dotnet", expose)
+		addHealthcheck(&runtime, "dotnet", expose, nil)
 		return &core.BuildPlan{
 			Framework:    fw.Name,
 			Stages:       []core.Stage{builder, runtime},
@@ -88,7 +88,7 @@ func planDotnet(fw *core.Framework) (*core.BuildPlan, error) {
 	)
 
 	addNonRootUser(&runtime, "app")
-	addHealthcheck(&runtime, "dotnet", port)
+	addHealthcheck(&runtime, "dotnet", port, nil)
 
 	return &core.BuildPlan{
 		Framework:    fw.Name,
