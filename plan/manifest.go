@@ -52,3 +52,90 @@ func ResolveDockerTag(runtime, version string) string {
 		return runtime
 	}
 }
+
+// validImageFamilies lists the accepted ImageFamily values.
+var validImageFamilies = map[string]bool{
+	"alpine":     true,
+	"slim":       true,
+	"distroless": true,
+}
+
+// ValidImageFamilies returns the set of accepted ImageFamily values.
+func ValidImageFamilies() []string { return []string{"alpine", "slim", "distroless"} }
+
+// ResolveRuntimeImage returns the runtime-stage base image for the given
+// runtime, version, and image family. An empty family uses the current
+// default for that runtime (Go→distroless, Node→alpine, Python→slim, etc.).
+// Returns an error when family is non-empty and not supported for the runtime.
+func ResolveRuntimeImage(runtime, version, family string) (string, error) {
+	if family != "" && !validImageFamilies[family] {
+		return "", fmt.Errorf("image_family %q is not valid; must be one of: alpine, slim, distroless", family)
+	}
+
+	ver := version // convenience alias; callers may pass "" for default
+
+	switch runtime {
+	case "node":
+		nodeVer := cmp.Or(ver, "22")
+		switch family {
+		case "", "alpine":
+			return fmt.Sprintf("node:%s-alpine", nodeVer), nil
+		case "slim":
+			return fmt.Sprintf("node:%s-slim", nodeVer), nil
+		case "distroless":
+			return fmt.Sprintf("gcr.io/distroless/nodejs%s-debian12", nodeVer), nil
+		}
+
+	case "python":
+		pyVer := cmp.Or(ver, "3.12")
+		switch family {
+		case "", "slim":
+			return fmt.Sprintf("python:%s-slim", pyVer), nil
+		case "alpine":
+			return fmt.Sprintf("python:%s-alpine", pyVer), nil
+		case "distroless":
+			return "gcr.io/distroless/python3-debian12", nil
+		}
+
+	case "go":
+		switch family {
+		case "", "distroless":
+			return "gcr.io/distroless/static-debian12:nonroot", nil
+		case "alpine":
+			return "alpine:3.21", nil
+		case "slim":
+			return "debian:bookworm-slim", nil
+		}
+
+	case "ruby":
+		rubyVer := cmp.Or(ver, "3.3")
+		switch family {
+		case "", "slim":
+			return fmt.Sprintf("ruby:%s-slim", rubyVer), nil
+		case "alpine":
+			return fmt.Sprintf("ruby:%s-alpine", rubyVer), nil
+		case "distroless":
+			return "", fmt.Errorf("image_family %q is not supported for runtime %q", family, runtime)
+		}
+
+	case "rust":
+		rustVer := cmp.Or(ver, "1.85")
+		switch family {
+		case "", "alpine":
+			return fmt.Sprintf("rust:%s-alpine", rustVer), nil
+		case "slim":
+			return fmt.Sprintf("rust:%s-slim", rustVer), nil
+		case "distroless":
+			return "", fmt.Errorf("image_family %q is not supported for runtime %q", family, runtime)
+		}
+
+	default:
+		if family != "" {
+			return "", fmt.Errorf("image_family is not supported for runtime %q", runtime)
+		}
+		return ResolveDockerTag(runtime, ver), nil
+	}
+
+	// unreachable, but required by compiler
+	return "", fmt.Errorf("unhandled runtime/family combination: %q/%q", runtime, family)
+}

@@ -58,24 +58,34 @@ type SecretConfig struct {
 // RuntimeCfg groups runtime-stage overrides.
 // User and Healthcheck use sentinel booleans because false disables the feature.
 type RuntimeCfg struct {
-	Image       string `toml:"image"  yaml:"image"  json:"image,omitempty"`
-	Expose      int    `toml:"expose" yaml:"expose" json:"expose,omitempty"`
-	User        string `toml:"-"      yaml:"-"      json:"-"`
-	UserSet     bool   `toml:"-"      yaml:"-"      json:"-"`
-	Healthcheck string `toml:"-"      yaml:"-"      json:"-"`
-	HCSet       bool   `toml:"-"      yaml:"-"      json:"-"`
+	Image       string `toml:"image"         yaml:"image"         json:"image,omitempty"`
+	Expose      int    `toml:"expose"        yaml:"expose"        json:"expose,omitempty"`
+	ImageFamily string `toml:"image_family"  yaml:"image_family"  json:"image_family,omitempty"`
+	User        string `toml:"-"             yaml:"-"             json:"-"`
+	UserSet     bool   `toml:"-"             yaml:"-"             json:"-"`
+	Healthcheck string `toml:"-"             yaml:"-"             json:"-"`
+	HCSet       bool   `toml:"-"             yaml:"-"             json:"-"`
 }
 
 // rawRuntimeCfg accepts bool or string for user/healthcheck during decode.
 type rawRuntimeCfg struct {
-	Image       string `toml:"image"       yaml:"image"       json:"image,omitempty"`
-	Expose      int    `toml:"expose"      yaml:"expose"      json:"expose,omitempty"`
-	User        any    `toml:"user"        yaml:"user"        json:"user,omitempty"`
-	Healthcheck any    `toml:"healthcheck" yaml:"healthcheck" json:"healthcheck,omitempty"`
+	Image       string `toml:"image"         yaml:"image"         json:"image,omitempty"`
+	Expose      int    `toml:"expose"        yaml:"expose"        json:"expose,omitempty"`
+	ImageFamily string `toml:"image_family"  yaml:"image_family"  json:"image_family,omitempty"`
+	User        any    `toml:"user"          yaml:"user"          json:"user,omitempty"`
+	Healthcheck any    `toml:"healthcheck"   yaml:"healthcheck"   json:"healthcheck,omitempty"`
+}
+
+// validImageFamilies mirrors plan.validImageFamilies to avoid a circular import.
+var validImageFamilies = map[string]bool{
+	"alpine": true, "slim": true, "distroless": true,
 }
 
 func (r rawRuntimeCfg) normalize() (RuntimeCfg, error) {
-	cfg := RuntimeCfg{Image: r.Image, Expose: r.Expose}
+	if r.ImageFamily != "" && !validImageFamilies[r.ImageFamily] {
+		return RuntimeCfg{}, fmt.Errorf("runtime_config.image_family %q is not valid; must be one of: alpine, slim, distroless", r.ImageFamily)
+	}
+	cfg := RuntimeCfg{Image: r.Image, Expose: r.Expose, ImageFamily: r.ImageFamily}
 	if r.User != nil {
 		switch v := r.User.(type) {
 		case bool:

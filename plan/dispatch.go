@@ -56,12 +56,40 @@ func Plan(fw *core.Framework, opts ...PlanOption) (*core.BuildPlan, error) {
 	}
 	if len(opts) > 0 {
 		cfg := ResolvePlanConfig(opts)
+		// Resolve ImageFamily → RuntimeImage when the caller hasn't set an explicit image.
+		if cfg.ImageFamily != "" && cfg.RuntimeImage == nil {
+			img, ferr := resolveRuntimeImageForFramework(fw, cfg.ImageFamily)
+			if ferr != nil {
+				return nil, ferr
+			}
+			cfg.RuntimeImage = &img
+		}
 		applyPlanOverrides(plan, cfg)
 		if cfg.ContextRoot != nil {
 			applyContextRoot(plan, *cfg.ContextRoot)
 		}
 	}
 	return plan, nil
+}
+
+// resolveRuntimeImageForFramework maps a framework + family to a runtime image tag.
+// It derives the canonical runtime name and version from fw, then delegates to
+// ResolveRuntimeImage.
+func resolveRuntimeImageForFramework(fw *core.Framework, family string) (string, error) {
+	switch {
+	case core.IsGoFramework(fw.Name):
+		return ResolveRuntimeImage("go", fw.GoVersion, family)
+	case core.IsNodeFramework(fw.Name):
+		return ResolveRuntimeImage("node", fw.NodeVersion, family)
+	case core.IsPythonFramework(fw.Name):
+		return ResolveRuntimeImage("python", fw.PythonVersion, family)
+	case core.IsRubyFramework(fw.Name):
+		return ResolveRuntimeImage("ruby", "", family)
+	case core.IsRustFramework(fw.Name):
+		return ResolveRuntimeImage("rust", "", family)
+	default:
+		return "", fmt.Errorf("image_family is not supported for runtime %q", fw.Name)
+	}
 }
 
 // applyPlanOverrides modifies the plan based on cfg.
