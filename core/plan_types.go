@@ -84,8 +84,9 @@ type CopyFrom struct {
 
 // AssetCopy describes a host file or directory to COPY into the runtime stage.
 type AssetCopy struct {
-	Src string `toml:"src" yaml:"src" json:"src"`
-	Dst string `toml:"dst" yaml:"dst" json:"dst"`
+	Src   string `toml:"src"   yaml:"src"   json:"src"`
+	Dst   string `toml:"dst"   yaml:"dst"   json:"dst"`
+	Chown string `toml:"chown" yaml:"chown" json:"chown,omitempty"` // optional, e.g. "permanu:permanu" or "1000:1000"
 }
 
 // Validate checks plan invariants before emission.

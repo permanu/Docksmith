@@ -491,7 +491,7 @@ func ConfigToPlanOptions(c *Config) ([]PlanOption, error) {
 	if len(c.RuntimeAssets) > 0 {
 		assets := make([]core.AssetCopy, len(c.RuntimeAssets))
 		for i, a := range c.RuntimeAssets {
-			assets[i] = core.AssetCopy{Src: a.Src, Dst: a.Dst}
+			assets[i] = core.AssetCopy{Src: a.Src, Dst: a.Dst, Chown: a.Chown}
 		}
 		opts = append(opts, WithRuntimeAssets(assets))
 	}

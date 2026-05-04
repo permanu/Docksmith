@@ -281,7 +281,11 @@ func applyRuntimeAssets(stage *core.Stage, assets []core.AssetCopy) {
 	}
 	copies := make([]core.Step, len(assets))
 	for i, a := range assets {
-		copies[i] = core.Step{Type: core.StepCopy, Args: []string{a.Src, a.Dst}}
+		if a.Chown != "" {
+			copies[i] = core.Step{Type: core.StepCopy, Args: []string{"--chown=" + a.Chown, a.Src, a.Dst}}
+		} else {
+			copies[i] = core.Step{Type: core.StepCopy, Args: []string{a.Src, a.Dst}}
+		}
 	}
 	stage.Steps = append(stage.Steps[:insertIdx], append(copies, stage.Steps[insertIdx:]...)...)
 }

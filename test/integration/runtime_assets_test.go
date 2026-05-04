@@ -125,6 +125,98 @@ func TestRuntimeAssets_DockerfileOutput(t *testing.T) {
 	}
 }
 
+// TestRuntimeAssets_Chown verifies that AssetCopy.Chown causes COPY --chown=<value>
+// to be emitted in the Dockerfile, and that missing chown leaves plain COPY.
+func TestRuntimeAssets_Chown(t *testing.T) {
+	fw := &core.Framework{
+		Name:         "go",
+		BuildCommand: "go build -o app .",
+		Port:         8080,
+	}
+	assets := []core.AssetCopy{
+		{Src: "atlas.hcl", Dst: "/app/atlas.hcl", Chown: "permanu:permanu"},
+		{Src: "sql", Dst: "/app/sql", Chown: "1000:1000"},
+		{Src: "migrations", Dst: "/app/migrations"},
+	}
+	df, err := docksmith.GenerateDockerfile(fw, plan.WithRuntimeAssets(assets))
+	if err != nil {
+		t.Fatalf("GenerateDockerfile: %v", err)
+	}
+
+	if !strings.Contains(df, "COPY --chown=permanu:permanu atlas.hcl /app/atlas.hcl") {
+		t.Errorf("Dockerfile missing COPY --chown=permanu:permanu:\n%s", df)
+	}
+	if !strings.Contains(df, "COPY --chown=1000:1000 sql /app/sql") {
+		t.Errorf("Dockerfile missing COPY --chown=1000:1000:\n%s", df)
+	}
+	// No chown: plain COPY, no --chown flag.
+	if !strings.Contains(df, "COPY migrations /app/migrations") {
+		t.Errorf("Dockerfile missing plain COPY migrations:\n%s", df)
+	}
+	if strings.Contains(df, "COPY --chown") && strings.Contains(df, "migrations /app/migrations") {
+		// Make sure the plain COPY line doesn't have --chown.
+		for _, line := range strings.Split(df, "\n") {
+			if strings.Contains(line, "migrations /app/migrations") && strings.Contains(line, "--chown") {
+				t.Errorf("migrations COPY should be plain but got: %s", line)
+			}
+		}
+	}
+}
+
+// TestRuntimeAssets_ChownConfig verifies chown roundtrips through config parse.
+func TestRuntimeAssets_ChownConfig(t *testing.T) {
+	toml := `runtime="go"
+[start]
+command="./app"
+[[runtime_assets]]
+src="atlas.hcl"
+dst="/app/atlas.hcl"
+chown="permanu:permanu"
+[[runtime_assets]]
+src="sql"
+dst="/app/sql"
+chown="1000:1000"
+`
+	cfg, err := config.ParseConfig("docksmith.toml", []byte(toml))
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	if cfg.RuntimeAssets[0].Chown != "permanu:permanu" {
+		t.Errorf("RuntimeAssets[0].Chown = %q, want %q", cfg.RuntimeAssets[0].Chown, "permanu:permanu")
+	}
+	if cfg.RuntimeAssets[1].Chown != "1000:1000" {
+		t.Errorf("RuntimeAssets[1].Chown = %q, want %q", cfg.RuntimeAssets[1].Chown, "1000:1000")
+	}
+}
+
+// TestRuntimeAssets_ChownValidation verifies invalid chown values are rejected.
+func TestRuntimeAssets_ChownValidation(t *testing.T) {
+	cases := []struct {
+		name  string
+		chown string
+	}{
+		{name: "shell injection semicolon", chown: "foo;bar"},
+		{name: "space in chown", chown: "foo bar"},
+		{name: "dollar sign", chown: "$USER"},
+		{name: "slash", chown: "foo/bar"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			toml := "runtime=\"go\"\n[start]\ncommand=\"./app\"\n[[runtime_assets]]\nsrc=\"config.yaml\"\ndst=\"/app/config.yaml\"\nchown=\"" + tc.chown + "\""
+			cfg, parseErr := config.ParseConfig("docksmith.toml", []byte(toml))
+			if parseErr != nil {
+				return // parse-time failure is also acceptable
+			}
+			if err := cfg.Validate(); err == nil {
+				t.Errorf("expected validation error for chown=%q, got nil", tc.chown)
+			}
+		})
+	}
+}
+
 // TestRuntimeAssets_Validation verifies parse-time validation rejects
 // bad src/dst combinations.
 func TestRuntimeAssets_Validation(t *testing.T) {
