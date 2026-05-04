@@ -165,6 +165,12 @@ func applyPlanOverrides(plan *core.BuildPlan, cfg *planConfig) error {
 	if cfg.User != nil {
 		removeSteps(last, core.StepUser)
 		if *cfg.User != "" {
+			spec, needsCreate := parseUserSpec(*cfg.User)
+			if needsCreate {
+				if err := createNamedUser(last, spec); err != nil {
+					return err
+				}
+			}
 			last.Steps = append(last.Steps, core.Step{Type: core.StepUser, Args: []string{*cfg.User}})
 		}
 	}

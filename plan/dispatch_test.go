@@ -167,3 +167,139 @@ func TestRuntimeSystemDeps_NotInBuilderStage(t *testing.T) {
 		}
 	}
 }
+
+// --- User creation integration tests via Plan() ---
+
+func TestPlan_WithUser_NumericOnly_NoUserCreation(t *testing.T) {
+	fw := &core.Framework{Name: "express", Port: 3000, StartCommand: "node index.js"}
+	p, err := Plan(fw, WithUser("1000:1000"))
+	if err != nil {
+		t.Fatalf("Plan() error: %v", err)
+	}
+	last := &p.Stages[len(p.Stages)-1]
+	for _, s := range last.Steps {
+		if s.Type == core.StepRun && (strings.Contains(s.Args[0], "adduser") || strings.Contains(s.Args[0], "useradd")) {
+			t.Errorf("numeric user should not produce adduser/useradd RUN step, got: %q", s.Args[0])
+		}
+	}
+	// USER directive should be set
+	var userStep *core.Step
+	for i := range last.Steps {
+		if last.Steps[i].Type == core.StepUser {
+			userStep = &last.Steps[i]
+		}
+	}
+	if userStep == nil || userStep.Args[0] != "1000:1000" {
+		t.Errorf("expected USER 1000:1000, got %v", userStep)
+	}
+}
+
+func TestPlan_WithUser_NamedAlpine_EmitsAddgroupAdduser(t *testing.T) {
+	// Node plans use alpine by default.
+	fw := &core.Framework{Name: "express", Port: 3000, StartCommand: "node index.js"}
+	p, err := Plan(fw, WithUser("permanu:1000"))
+	if err != nil {
+		t.Fatalf("Plan() error: %v", err)
+	}
+	last := &p.Stages[len(p.Stages)-1]
+
+	var runIdx, userIdx int = -1, -1
+	for i, s := range last.Steps {
+		if s.Type == core.StepRun && strings.Contains(s.Args[0], "addgroup") {
+			runIdx = i
+		}
+		if s.Type == core.StepUser {
+			userIdx = i
+		}
+	}
+	if runIdx < 0 {
+		t.Fatal("expected RUN addgroup/adduser step")
+	}
+	if userIdx < 0 {
+		t.Fatal("expected USER step")
+	}
+	if runIdx >= userIdx {
+		t.Errorf("RUN user creation (idx %d) must come before USER directive (idx %d)", runIdx, userIdx)
+	}
+	cmd := last.Steps[runIdx].Args[0]
+	if !strings.Contains(cmd, "addgroup -S permanu") {
+		t.Errorf("missing addgroup -S permanu: %q", cmd)
+	}
+	if !strings.Contains(cmd, "adduser -S -G permanu -u 1000 permanu") {
+		t.Errorf("missing adduser -S -G permanu -u 1000 permanu: %q", cmd)
+	}
+	// USER directive should use the original string
+	if last.Steps[userIdx].Args[0] != "permanu:1000" {
+		t.Errorf("USER directive: got %q, want permanu:1000", last.Steps[userIdx].Args[0])
+	}
+}
+
+func TestPlan_WithUser_NamedSlim_EmitsGroupaddUseradd(t *testing.T) {
+	// Python plans use slim by default.
+	fw := &core.Framework{Name: "django", Port: 8000, StartCommand: "gunicorn config.wsgi"}
+	p, err := Plan(fw, WithUser("permanu:1000"))
+	if err != nil {
+		t.Fatalf("Plan() error: %v", err)
+	}
+	last := &p.Stages[len(p.Stages)-1]
+
+	var runStep *core.Step
+	for i := range last.Steps {
+		if last.Steps[i].Type == core.StepRun && strings.Contains(last.Steps[i].Args[0], "groupadd") {
+			runStep = &last.Steps[i]
+		}
+	}
+	if runStep == nil {
+		t.Fatal("expected RUN groupadd/useradd step for slim image")
+	}
+	if !strings.Contains(runStep.Args[0], "groupadd --system permanu") {
+		t.Errorf("missing groupadd: %q", runStep.Args[0])
+	}
+	if !strings.Contains(runStep.Args[0], "useradd") {
+		t.Errorf("missing useradd: %q", runStep.Args[0])
+	}
+}
+
+func TestPlan_WithUser_NamedDistroless_NoCreationStep(t *testing.T) {
+	// Go plans use distroless by default. Distroless has no shell — user creation
+	// is skipped; USER is emitted as-is. The built-in "nonroot" user already exists.
+	fw := &core.Framework{Name: "go", Port: 8080, BuildCommand: "go build -o server .", StartCommand: "./server"}
+	p, err := Plan(fw, WithUser("nonroot"))
+	if err != nil {
+		t.Fatalf("Plan() error: %v", err)
+	}
+	last := &p.Stages[len(p.Stages)-1]
+	for _, s := range last.Steps {
+		if s.Type == core.StepRun && (strings.Contains(s.Args[0], "adduser") || strings.Contains(s.Args[0], "useradd")) {
+			t.Errorf("distroless should not emit user creation step, got: %q", s.Args[0])
+		}
+	}
+	// USER step should be present
+	var userStep *core.Step
+	for i := range last.Steps {
+		if last.Steps[i].Type == core.StepUser {
+			userStep = &last.Steps[i]
+		}
+	}
+	if userStep == nil || userStep.Args[0] != "nonroot" {
+		t.Errorf("expected USER nonroot, got %v", userStep)
+	}
+}
+
+func TestPlan_WithUser_NameUIDGID_Alpine(t *testing.T) {
+	fw := &core.Framework{Name: "express", Port: 3000, StartCommand: "node index.js"}
+	p, err := Plan(fw, WithUser("permanu:1000:2000"))
+	if err != nil {
+		t.Fatalf("Plan() error: %v", err)
+	}
+	last := &p.Stages[len(p.Stages)-1]
+	for _, s := range last.Steps {
+		if s.Type == core.StepRun && strings.Contains(s.Args[0], "addgroup") {
+			if !strings.Contains(s.Args[0], "-g 2000") {
+				t.Errorf("expected gid 2000 in addgroup: %q", s.Args[0])
+			}
+			return
+		}
+	}
+	t.Error("no addgroup step found")
+}
