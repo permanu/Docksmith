@@ -1,9 +1,11 @@
 package plan
 
 import (
-	"github.com/permanu/docksmith/core"
 	"strings"
 	"testing"
+
+	"github.com/permanu/docksmith/config"
+	"github.com/permanu/docksmith/core"
 )
 
 func goFramework() *core.Framework {
@@ -268,4 +270,72 @@ func TestPlanGo_NoBuildCommand(t *testing.T) {
 	if err := plan.Validate(); err != nil {
 		t.Errorf("plan with no BuildCommand should still validate: %v", err)
 	}
+}
+
+func TestPlanGo_LdFlagsAlphabeticalOrder(t *testing.T) {
+	fw := goFramework()
+	p, err := Plan(fw, WithLdFlags(map[string]string{
+		"main.Version": "1.0.0",
+		"main.Commit":  "abc",
+	}))
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	want := `-ldflags="-w -s -X main.Commit=abc -X main.Version=1.0.0"`
+	builder := p.Stages[0]
+	for _, step := range builder.Steps {
+		if step.Type == core.StepRun {
+			for _, arg := range step.Args {
+				if strings.Contains(arg, "go build") {
+					if !strings.Contains(arg, want) {
+						t.Errorf("go build step ldflags mismatch\ngot:  %q\nwant to contain: %q", arg, want)
+					}
+					return
+				}
+			}
+		}
+	}
+	t.Error("no go build step found")
+}
+
+func TestPlanGo_LdFlagsFixture(t *testing.T) {
+	// Load config from fixture, build plan, and verify ldflags in the emitted Dockerfile.
+	cfg, err := config.Load("../testdata/fixtures/go-ldflags")
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("no config found in fixture")
+	}
+	if len(cfg.Build.LdFlags) == 0 {
+		t.Fatal("fixture config has no ldflags")
+	}
+
+	opts := []PlanOption{WithLdFlags(cfg.Build.LdFlags)}
+	fw := &core.Framework{
+		Name:         "go-std",
+		GoVersion:    "1.22",
+		Port:         8080,
+		BuildCommand: cfg.Build.Command,
+		StartCommand: cfg.Start.Command,
+	}
+	p, err := Plan(fw, opts...)
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	want := `-ldflags="-w -s -X main.Commit=abc -X main.Version=1.0.0"`
+	builder := p.Stages[0]
+	for _, step := range builder.Steps {
+		if step.Type == core.StepRun {
+			for _, arg := range step.Args {
+				if strings.Contains(arg, "go build") {
+					if !strings.Contains(arg, want) {
+						t.Errorf("go build step ldflags mismatch\ngot:  %q\nwant to contain: %q", arg, want)
+					}
+					return
+				}
+			}
+		}
+	}
+	t.Error("no go build step found")
 }

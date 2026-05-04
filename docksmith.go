@@ -144,6 +144,7 @@ var (
 	WithBuildCacheDisabled  = plan.WithBuildCacheDisabled
 	WithSecrets             = plan.WithSecrets
 	WithContextRoot         = plan.WithContextRoot
+	WithLdFlags             = plan.WithLdFlags
 )
 
 var ResolveDockerTag = plan.ResolveDockerTag
@@ -459,6 +460,10 @@ func ConfigToPlanOptions(c *Config) ([]PlanOption, error) {
 
 	if c.ContextRoot != "" {
 		opts = append(opts, WithContextRoot(c.ContextRoot))
+	}
+
+	if len(c.Build.LdFlags) > 0 {
+		opts = append(opts, WithLdFlags(c.Build.LdFlags))
 	}
 
 	return opts, nil

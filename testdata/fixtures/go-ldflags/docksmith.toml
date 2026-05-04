@@ -1,0 +1,10 @@
+runtime = "go"
+
+[build]
+command = "go build -o /app/server ."
+[build.ldflags]
+"main.Version" = "1.0.0"
+"main.Commit" = "abc"
+
+[start]
+command = "./server"

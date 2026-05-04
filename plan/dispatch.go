@@ -164,6 +164,10 @@ func applyPlanOverrides(plan *core.BuildPlan, cfg *planConfig) {
 	if len(cfg.Secrets) > 0 {
 		applySecrets(plan, cfg.Secrets)
 	}
+
+	if len(cfg.LdFlags) > 0 {
+		applyLdFlags(plan, cfg.LdFlags)
+	}
 }
 
 // applySecrets attaches secret mounts to RUN steps in install/build stages.
@@ -269,4 +273,41 @@ func replaceOrAddExpose(stage *core.Stage, port int) {
 		}
 	}
 	stage.Steps = append(stage.Steps, core.Step{Type: core.StepExpose, Args: []string{portStr}})
+}
+
+// applyLdFlags rewrites the `-ldflags=` argument in the Go build RUN step
+// of the builder stage. It keeps the default "-w -s" flags and appends
+// sorted "-X key=value" pairs for determinism.
+// It is a no-op for plans that have no "go build" step.
+func applyLdFlags(plan *core.BuildPlan, flags map[string]string) {
+	// Build sorted -X pairs for determinism.
+	keys := make([]string, 0, len(flags))
+	for k := range flags {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	extra := make([]string, 0, len(keys))
+	for _, k := range keys {
+		extra = append(extra, fmt.Sprintf("-X %s=%s", k, flags[k]))
+	}
+	suffix := " " + strings.Join(extra, " ")
+
+	for i := range plan.Stages {
+		for j := range plan.Stages[i].Steps {
+			step := &plan.Stages[i].Steps[j]
+			if step.Type != core.StepRun {
+				continue
+			}
+			for k, arg := range step.Args {
+				if !strings.Contains(arg, "go build") || !strings.Contains(arg, "-ldflags=") {
+					continue
+				}
+				// Append -X pairs inside the existing -ldflags="..." value.
+				// The hardcoded form is: -ldflags="-w -s"
+				// We need to produce:    -ldflags="-w -s -X k=v ..."
+				step.Args[k] = strings.Replace(arg, `-ldflags="-w -s"`, fmt.Sprintf(`-ldflags="-w -s%s"`, suffix), 1)
+				return
+			}
+		}
+	}
 }
