@@ -6,6 +6,11 @@ import (
 	"testing"
 )
 
+const (
+	testSHA256Amd64 = "c12b889e3349f0e5610aec32fe327e5a6911a0e472754a0c381c30c7c0630e88"
+	testSHA256Arm64 = "b76308f558d50d006add507f3ab86afc1147644519dd327f7f5fac6d02d4f595"
+)
+
 func TestLoad_MissingFile_ReturnsNilNil(t *testing.T) {
 	dir := t.TempDir()
 	cfg, err := Load(dir)
@@ -142,5 +147,102 @@ system_deps = ["ca-certificates; rm -rf /"]
 	_, err := ParseConfig("docksmith.toml", data)
 	if err == nil {
 		t.Fatal("expected error for invalid package name with shell metacharacter, got nil")
+	}
+}
+
+// TestParseConfig_ExternalToolSHA256String verifies that a TOML config with a
+// single-string sha256 decodes into ExternalTool.SHA256.
+func TestParseConfig_ExternalToolSHA256String(t *testing.T) {
+	data := []byte(`
+runtime = "go"
+[start]
+command = "./app"
+[[external_tools]]
+name = "atlas"
+url = "https://release.ariga.io/atlas/atlas-linux-${arch}-v1.2.0"
+sha256 = "` + testSHA256Amd64 + `"
+install_path = "/app/bin"
+format = "binary"
+`)
+	cfg, err := ParseConfig("docksmith.toml", data)
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
+	if len(cfg.ExternalTools) != 1 {
+		t.Fatalf("want 1 external tool, got %d", len(cfg.ExternalTools))
+	}
+	tool := cfg.ExternalTools[0]
+	if tool.SHA256 != testSHA256Amd64 {
+		t.Errorf("SHA256 = %q, want %q", tool.SHA256, testSHA256Amd64)
+	}
+	if len(tool.SHA256Map) != 0 {
+		t.Errorf("SHA256Map should be empty for string sha256, got %v", tool.SHA256Map)
+	}
+}
+
+// TestParseConfig_ExternalToolSHA256Map_TOML verifies that a TOML config with an
+// inline table sha256 decodes into ExternalTool.SHA256Map.
+func TestParseConfig_ExternalToolSHA256Map_TOML(t *testing.T) {
+	data := []byte(`
+runtime = "go"
+[start]
+command = "./app"
+[[external_tools]]
+name = "atlas"
+url = "https://release.ariga.io/atlas/atlas-linux-${arch}-v1.2.0"
+sha256 = { amd64 = "` + testSHA256Amd64 + `", arm64 = "` + testSHA256Arm64 + `" }
+install_path = "/app/bin"
+format = "binary"
+`)
+	cfg, err := ParseConfig("docksmith.toml", data)
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
+	if len(cfg.ExternalTools) != 1 {
+		t.Fatalf("want 1 external tool, got %d", len(cfg.ExternalTools))
+	}
+	tool := cfg.ExternalTools[0]
+	if tool.SHA256 != "" {
+		t.Errorf("SHA256 should be empty for map sha256, got %q", tool.SHA256)
+	}
+	if tool.SHA256Map["amd64"] != testSHA256Amd64 {
+		t.Errorf("SHA256Map[amd64] = %q, want %q", tool.SHA256Map["amd64"], testSHA256Amd64)
+	}
+	if tool.SHA256Map["arm64"] != testSHA256Arm64 {
+		t.Errorf("SHA256Map[arm64] = %q, want %q", tool.SHA256Map["arm64"], testSHA256Arm64)
+	}
+}
+
+// TestParseConfig_ExternalToolSHA256Map_YAML verifies YAML map-form sha256.
+func TestParseConfig_ExternalToolSHA256Map_YAML(t *testing.T) {
+	data := []byte(`
+runtime: go
+start:
+  command: ./app
+external_tools:
+  - name: atlas
+    url: "https://release.ariga.io/atlas/atlas-linux-${arch}-v1.2.0"
+    sha256:
+      amd64: "` + testSHA256Amd64 + `"
+      arm64: "` + testSHA256Arm64 + `"
+    install_path: /app/bin
+    format: binary
+`)
+	cfg, err := ParseConfig("docksmith.yaml", data)
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
+	if len(cfg.ExternalTools) != 1 {
+		t.Fatalf("want 1 external tool, got %d", len(cfg.ExternalTools))
+	}
+	tool := cfg.ExternalTools[0]
+	if tool.SHA256 != "" {
+		t.Errorf("SHA256 should be empty for map sha256, got %q", tool.SHA256)
+	}
+	if tool.SHA256Map["amd64"] != testSHA256Amd64 {
+		t.Errorf("SHA256Map[amd64] = %q, want %q", tool.SHA256Map["amd64"], testSHA256Amd64)
+	}
+	if tool.SHA256Map["arm64"] != testSHA256Arm64 {
+		t.Errorf("SHA256Map[arm64] = %q, want %q", tool.SHA256Map["arm64"], testSHA256Arm64)
 	}
 }
