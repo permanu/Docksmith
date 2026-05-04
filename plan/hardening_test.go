@@ -302,3 +302,131 @@ func findHealthcheck(stage *core.Stage) *core.Step {
 	}
 	return nil
 }
+
+// --- parseUserSpec tests ---
+
+func TestParseUserSpec_NumericUID(t *testing.T) {
+	spec, needsCreate := parseUserSpec("1000")
+	if needsCreate {
+		t.Error("numeric uid should not need user creation")
+	}
+	if spec.uid != "1000" || spec.name != "" {
+		t.Errorf("unexpected spec: %+v", spec)
+	}
+}
+
+func TestParseUserSpec_NumericUIDGID(t *testing.T) {
+	spec, needsCreate := parseUserSpec("1000:2000")
+	if needsCreate {
+		t.Error("numeric uid:gid should not need user creation")
+	}
+	if spec.uid != "1000" || spec.gid != "2000" || spec.name != "" {
+		t.Errorf("unexpected spec: %+v", spec)
+	}
+}
+
+func TestParseUserSpec_NameOnly(t *testing.T) {
+	spec, needsCreate := parseUserSpec("permanu")
+	if !needsCreate {
+		t.Error("named user should need user creation")
+	}
+	if spec.name != "permanu" || spec.uid != "" {
+		t.Errorf("unexpected spec: %+v", spec)
+	}
+}
+
+func TestParseUserSpec_NameUID(t *testing.T) {
+	spec, needsCreate := parseUserSpec("permanu:1000")
+	if !needsCreate {
+		t.Error("named user with uid should need user creation")
+	}
+	if spec.name != "permanu" || spec.uid != "1000" || spec.gid != "" {
+		t.Errorf("unexpected spec: %+v", spec)
+	}
+}
+
+func TestParseUserSpec_NameUIDGID(t *testing.T) {
+	spec, needsCreate := parseUserSpec("permanu:1000:2000")
+	if !needsCreate {
+		t.Error("named user with uid+gid should need user creation")
+	}
+	if spec.name != "permanu" || spec.uid != "1000" || spec.gid != "2000" {
+		t.Errorf("unexpected spec: %+v", spec)
+	}
+}
+
+// --- createNamedUser tests ---
+
+func TestCreateNamedUser_Alpine_NameUID(t *testing.T) {
+	stage := &core.Stage{Name: "runtime", From: "node:22-alpine"}
+	spec := userSpec{name: "permanu", uid: "1000"}
+	if err := createNamedUser(stage, spec); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(stage.Steps) != 1 || stage.Steps[0].Type != core.StepRun {
+		t.Fatalf("expected 1 RUN step, got %d", len(stage.Steps))
+	}
+	cmd := stage.Steps[0].Args[0]
+	if !strings.Contains(cmd, "addgroup -S permanu") {
+		t.Errorf("missing addgroup: %q", cmd)
+	}
+	if !strings.Contains(cmd, "adduser -S -G permanu -u 1000 permanu") {
+		t.Errorf("missing adduser with uid: %q", cmd)
+	}
+}
+
+func TestCreateNamedUser_Alpine_NameUIDGID(t *testing.T) {
+	stage := &core.Stage{Name: "runtime", From: "python:3.12-alpine"}
+	spec := userSpec{name: "permanu", uid: "1000", gid: "2000"}
+	if err := createNamedUser(stage, spec); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cmd := stage.Steps[0].Args[0]
+	if !strings.Contains(cmd, "-g 2000") {
+		t.Errorf("missing gid in addgroup: %q", cmd)
+	}
+	if !strings.Contains(cmd, "adduser -S -G permanu -u 1000 permanu") {
+		t.Errorf("missing adduser with uid: %q", cmd)
+	}
+}
+
+func TestCreateNamedUser_Slim_NameUID(t *testing.T) {
+	stage := &core.Stage{Name: "runtime", From: "python:3.12-slim"}
+	spec := userSpec{name: "permanu", uid: "1000"}
+	if err := createNamedUser(stage, spec); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cmd := stage.Steps[0].Args[0]
+	if !strings.Contains(cmd, "groupadd --system permanu") {
+		t.Errorf("missing groupadd: %q", cmd)
+	}
+	if !strings.Contains(cmd, "useradd --system --no-create-home -u 1000 --gid permanu permanu") {
+		t.Errorf("missing useradd with uid: %q", cmd)
+	}
+}
+
+func TestCreateNamedUser_Slim_NameUIDGID(t *testing.T) {
+	stage := &core.Stage{Name: "runtime", From: "node:22-slim"}
+	spec := userSpec{name: "permanu", uid: "1000", gid: "2000"}
+	if err := createNamedUser(stage, spec); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cmd := stage.Steps[0].Args[0]
+	if !strings.Contains(cmd, "groupadd --system -g 2000 permanu") {
+		t.Errorf("missing groupadd with gid: %q", cmd)
+	}
+}
+
+func TestCreateNamedUser_Distroless_SkipsCreation(t *testing.T) {
+	// Distroless has no shell — createNamedUser is a no-op; USER directive is
+	// emitted by the caller as-is. The user must already exist in the image
+	// (e.g. the built-in "nonroot" user).
+	stage := &core.Stage{Name: "runtime", From: "gcr.io/distroless/static-debian12:nonroot"}
+	spec := userSpec{name: "nonroot", uid: "65532"}
+	if err := createNamedUser(stage, spec); err != nil {
+		t.Fatalf("unexpected error on distroless: %v", err)
+	}
+	if len(stage.Steps) != 0 {
+		t.Errorf("distroless should not emit any RUN step for user creation, got %d steps", len(stage.Steps))
+	}
+}
