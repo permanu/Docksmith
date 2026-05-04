@@ -530,7 +530,7 @@ func applyExternalTools(plan *core.BuildPlan, tools []config.ExternalTool) {
 	for _, t := range tools {
 		step := core.Step{
 			Type: core.StepFetchTool,
-			Args: []string{t.Name, t.URL, t.SHA256, t.InstallPath},
+			Args: []string{t.Name, t.URL, t.SHA256, t.InstallPath, t.Format},
 		}
 		if t.Stage == "builder" {
 			first.Steps = append(first.Steps, step)
