@@ -316,6 +316,111 @@ func TestEmitDockerfile_SyntaxComment(t *testing.T) {
 	assertContains(t, out, "# syntax=docker/dockerfile:1")
 }
 
+// ImageFamily tests -------------------------------------------------------
+
+// TestEmitDockerfile_Go_ImageFamily_Alpine verifies that WithImageFamily("alpine")
+// produces alpine:3.21 as the Go runtime stage, not distroless.
+func TestEmitDockerfile_Go_ImageFamily_Alpine(t *testing.T) {
+	fw := &docksmith.Framework{
+		Name:      "go",
+		GoVersion: "1.26",
+		Port:      8080,
+	}
+	p, err := docksmith.Plan(fw, docksmith.WithImageFamily("alpine"))
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	out := docksmith.EmitDockerfile(p)
+	assertContains(t, out, "FROM alpine:3.21 AS runtime")
+	if strings.Contains(out, "distroless") {
+		t.Errorf("expected no distroless in alpine-family plan, got:\n%s", out)
+	}
+}
+
+// TestEmitDockerfile_Go_ImageFamily_Slim verifies that WithImageFamily("slim")
+// produces debian:bookworm-slim as the Go runtime stage.
+func TestEmitDockerfile_Go_ImageFamily_Slim(t *testing.T) {
+	fw := &docksmith.Framework{
+		Name:      "go",
+		GoVersion: "1.26",
+		Port:      8080,
+	}
+	p, err := docksmith.Plan(fw, docksmith.WithImageFamily("slim"))
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	out := docksmith.EmitDockerfile(p)
+	assertContains(t, out, "FROM debian:bookworm-slim AS runtime")
+}
+
+// TestEmitDockerfile_Go_ImageFamily_Default verifies that omitting ImageFamily
+// keeps the distroless default for Go.
+func TestEmitDockerfile_Go_ImageFamily_Default(t *testing.T) {
+	out := docksmith.EmitDockerfile(mustGoPlan(t))
+	assertContains(t, out, "FROM gcr.io/distroless/static-debian12:nonroot AS runtime")
+}
+
+// TestEmitDockerfile_Node_ImageFamily_Slim verifies that WithImageFamily("slim")
+// produces node:22-slim as the Node runtime stage instead of alpine.
+func TestEmitDockerfile_Node_ImageFamily_Slim(t *testing.T) {
+	fw := &docksmith.Framework{
+		Name:           "nextjs",
+		NodeVersion:    "22",
+		PackageManager: "npm",
+		Port:           3000,
+		StartCommand:   "node server.js",
+	}
+	p, err := docksmith.Plan(fw, docksmith.WithImageFamily("slim"))
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	out := docksmith.EmitDockerfile(p)
+	assertContains(t, out, "FROM node:22-slim AS runtime")
+	if strings.Contains(out, "node:22-alpine AS runtime") {
+		t.Errorf("expected node:22-slim runtime, got alpine:\n%s", out)
+	}
+}
+
+// TestEmitDockerfile_Node_ImageFamily_Distroless verifies that WithImageFamily("distroless")
+// produces a gcr.io/distroless/nodejs runtime stage for Node.
+func TestEmitDockerfile_Node_ImageFamily_Distroless(t *testing.T) {
+	fw := &docksmith.Framework{
+		Name:           "nextjs",
+		NodeVersion:    "22",
+		PackageManager: "npm",
+		Port:           3000,
+		StartCommand:   "node server.js",
+	}
+	p, err := docksmith.Plan(fw, docksmith.WithImageFamily("distroless"))
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	out := docksmith.EmitDockerfile(p)
+	assertContains(t, out, "gcr.io/distroless/nodejs22-debian12")
+}
+
+// TestEmitDockerfile_ImageFamily_Invalid verifies that an unknown family returns an error.
+func TestEmitDockerfile_ImageFamily_Invalid(t *testing.T) {
+	fw := &docksmith.Framework{Name: "go", GoVersion: "1.26", Port: 8080}
+	_, err := docksmith.Plan(fw, docksmith.WithImageFamily("nanokernel"))
+	if err == nil {
+		t.Fatal("expected error for unknown image_family, got nil")
+	}
+	if !strings.Contains(err.Error(), "nanokernel") {
+		t.Errorf("error should mention the bad value, got: %v", err)
+	}
+}
+
+// TestEmitDockerfile_ImageFamily_UnsupportedRuntime verifies that requesting
+// distroless for a runtime that doesn't support it returns a clear error.
+func TestEmitDockerfile_ImageFamily_UnsupportedRuntime(t *testing.T) {
+	fw := &docksmith.Framework{Name: "ruby", Port: 3000, StartCommand: "bundle exec puma"}
+	_, err := docksmith.Plan(fw, docksmith.WithImageFamily("distroless"))
+	if err == nil {
+		t.Fatal("expected error for distroless on ruby, got nil")
+	}
+}
+
 // helpers -----------------------------------------------------------------
 
 func assertContains(t *testing.T, haystack, needle string) {

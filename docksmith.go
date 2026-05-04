@@ -145,9 +145,12 @@ var (
 	WithSecrets             = plan.WithSecrets
 	WithContextRoot         = plan.WithContextRoot
 	WithLdFlags             = plan.WithLdFlags
+	WithImageFamily         = plan.WithImageFamily
 )
 
 var ResolveDockerTag = plan.ResolveDockerTag
+var ResolveRuntimeImage = plan.ResolveRuntimeImage
+var ValidImageFamilies = plan.ValidImageFamilies
 var FrameworkDefaults = plan.FrameworkDefaults
 var BuildkitCacheArgs = plan.BuildkitCacheArgs
 var BuildkitMultiArchCacheArgs = plan.BuildkitMultiArchCacheArgs
@@ -439,6 +442,9 @@ func ConfigToPlanOptions(c *Config) ([]PlanOption, error) {
 	}
 	if c.RuntimeConfig.Image != "" {
 		opts = append(opts, WithRuntimeImage(c.RuntimeConfig.Image))
+	}
+	if c.RuntimeConfig.ImageFamily != "" {
+		opts = append(opts, WithImageFamily(c.RuntimeConfig.ImageFamily))
 	}
 	if c.RuntimeConfig.Expose > 0 {
 		opts = append(opts, WithExpose(c.RuntimeConfig.Expose))

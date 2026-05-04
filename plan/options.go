@@ -14,6 +14,7 @@ type PlanConfig struct {
 	Healthcheck  *string
 	RuntimeImage *string
 	BaseImage    *string
+	ImageFamily  string // "alpine", "slim", or "distroless"; empty = use runtime default
 	Entrypoint   []string
 	ExtraEnv     map[string]string
 	Expose       *int
@@ -128,6 +129,13 @@ func WithContextRoot(appSubdir string) PlanOption {
 // Only honoured by the Go plan builder; ignored for all other runtimes.
 func WithLdFlags(flags map[string]string) PlanOption {
 	return planOptionFunc(func(c *planConfig) { c.LdFlags = flags })
+}
+
+// WithImageFamily sets the runtime-stage base image family.
+// Accepted values: "alpine", "slim", "distroless".
+// When unset the runtime's default is used (Go→distroless, Node→alpine, Python→slim).
+func WithImageFamily(family string) PlanOption {
+	return planOptionFunc(func(c *planConfig) { c.ImageFamily = family })
 }
 
 // ResolvePlanConfig resolves a slice of PlanOption into a PlanConfig.
