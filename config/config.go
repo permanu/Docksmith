@@ -23,12 +23,23 @@ type AssetCopy struct {
 
 // ExternalTool describes a versioned binary to fetch and verify during the build.
 type ExternalTool struct {
+	Name        string            `toml:"name"         yaml:"name"         json:"name"`
+	URL         string            `toml:"url"          yaml:"url"          json:"url"`                 // may contain ${TARGETARCH}
+	SHA256      string            `toml:"sha256"       yaml:"sha256"       json:"sha256,omitempty"`    // 64 hex chars; mutually exclusive with SHA256Map
+	SHA256Map   map[string]string `toml:"sha256map"    yaml:"sha256map"    json:"sha256map,omitempty"` // arch → sha256; mutually exclusive with SHA256
+	InstallPath string            `toml:"install_path" yaml:"install_path" json:"install_path"`
+	Stage       string            `toml:"stage"        yaml:"stage"        json:"stage"`            // "builder" or "runtime", default "runtime"
+	Format      string            `toml:"format"       yaml:"format"       json:"format,omitempty"` // "tar.gz" (default), "binary", or "zip"
+}
+
+// rawExternalTool accepts sha256 as either a string or a map during decode.
+type rawExternalTool struct {
 	Name        string `toml:"name"         yaml:"name"         json:"name"`
-	URL         string `toml:"url"          yaml:"url"          json:"url"`    // may contain ${TARGETARCH}
-	SHA256      string `toml:"sha256"       yaml:"sha256"       json:"sha256"` // 64 hex chars
+	URL         string `toml:"url"          yaml:"url"          json:"url"`
+	SHA256      any    `toml:"sha256"       yaml:"sha256"       json:"sha256,omitempty"`
 	InstallPath string `toml:"install_path" yaml:"install_path" json:"install_path"`
-	Stage       string `toml:"stage"        yaml:"stage"        json:"stage"`            // "builder" or "runtime", default "runtime"
-	Format      string `toml:"format"       yaml:"format"       json:"format,omitempty"` // "tar.gz" (default), "binary", or "zip"
+	Stage       string `toml:"stage"        yaml:"stage"        json:"stage"`
+	Format      string `toml:"format"       yaml:"format"       json:"format,omitempty"`
 }
 
 // Config represents a user-provided docksmith.toml/yaml/json configuration.
@@ -285,7 +296,7 @@ type rawConfig struct {
 	RuntimeConfig  rawRuntimeCfg           `toml:"runtime_config"  yaml:"runtime_config"  json:"runtime_config,omitempty"`
 	Secrets        map[string]SecretConfig `toml:"secrets"         yaml:"secrets"         json:"secrets,omitempty"`
 	RuntimeAssets  []AssetCopy             `toml:"runtime_assets"  yaml:"runtime_assets"  json:"runtime_assets,omitempty"`
-	ExternalTools  []ExternalTool          `toml:"external_tools"  yaml:"external_tools"  json:"external_tools,omitempty"`
+	ExternalTools  []rawExternalTool       `toml:"external_tools"  yaml:"external_tools"  json:"external_tools,omitempty"`
 }
 
 // ParseConfig parses raw config data based on the file extension in name.
@@ -302,11 +313,19 @@ func ParseConfig(name string, data []byte) (*Config, error) {
 			return nil, err
 		}
 		if undecoded := md.Undecoded(); len(undecoded) > 0 {
-			keys := make([]string, len(undecoded))
-			for i, k := range undecoded {
-				keys[i] = k.String()
+			var unknown []string
+			for _, k := range undecoded {
+				ks := k.String()
+				// sha256 is declared as `any` so TOML marks inline-table keys as
+				// undecoded. Filter them out — normalizeExternalTools handles them.
+				if strings.HasPrefix(ks, "external_tools.sha256.") {
+					continue
+				}
+				unknown = append(unknown, ks)
 			}
-			return nil, fmt.Errorf("unknown keys: %s", strings.Join(keys, ", "))
+			if len(unknown) > 0 {
+				return nil, fmt.Errorf("unknown keys: %s", strings.Join(unknown, ", "))
+			}
 		}
 	default:
 		if err := yaml.Unmarshal(data, &raw); err != nil {
@@ -315,6 +334,11 @@ func ParseConfig(name string, data []byte) (*Config, error) {
 	}
 
 	rc, err := raw.RuntimeConfig.normalize()
+	if err != nil {
+		return nil, err
+	}
+
+	tools, err := normalizeExternalTools(raw.ExternalTools)
 	if err != nil {
 		return nil, err
 	}
@@ -332,8 +356,59 @@ func ParseConfig(name string, data []byte) (*Config, error) {
 		RuntimeConfig:  rc,
 		Secrets:        raw.Secrets,
 		RuntimeAssets:  raw.RuntimeAssets,
-		ExternalTools:  raw.ExternalTools,
+		ExternalTools:  tools,
 	}, nil
+}
+
+// normalizeExternalTools converts []rawExternalTool → []ExternalTool, resolving the
+// sha256 union type (string or map<arch,sha256>).
+func normalizeExternalTools(raws []rawExternalTool) ([]ExternalTool, error) {
+	if len(raws) == 0 {
+		return nil, nil
+	}
+	out := make([]ExternalTool, len(raws))
+	for i, r := range raws {
+		t := ExternalTool{
+			Name:        r.Name,
+			URL:         r.URL,
+			InstallPath: r.InstallPath,
+			Stage:       r.Stage,
+			Format:      r.Format,
+		}
+		switch v := r.SHA256.(type) {
+		case nil:
+			// both fields remain zero — validation will catch this.
+		case string:
+			t.SHA256 = v
+		case map[string]any:
+			t.SHA256Map = make(map[string]string, len(v))
+			for arch, raw := range v {
+				s, ok := raw.(string)
+				if !ok {
+					return nil, fmt.Errorf("external_tools[%d] %q: sha256 map value for %q must be a string", i, r.Name, arch)
+				}
+				t.SHA256Map[arch] = s
+			}
+		case map[any]any:
+			// yaml.v3 may decode map keys as interface{} in some edge cases
+			t.SHA256Map = make(map[string]string, len(v))
+			for k, raw := range v {
+				arch, ok := k.(string)
+				if !ok {
+					return nil, fmt.Errorf("external_tools[%d] %q: sha256 map key must be a string", i, r.Name)
+				}
+				s, ok := raw.(string)
+				if !ok {
+					return nil, fmt.Errorf("external_tools[%d] %q: sha256 map value for %q must be a string", i, r.Name, arch)
+				}
+				t.SHA256Map[arch] = s
+			}
+		default:
+			return nil, fmt.Errorf("external_tools[%d] %q: sha256 must be a 64-hex string or an arch→sha256 map, got %T", i, r.Name, r.SHA256)
+		}
+		out[i] = t
+	}
+	return out, nil
 }
 
 // Validate checks that the config has required fields and valid values.
@@ -481,6 +556,15 @@ var (
 	reBinaryName = reToolName // same rule: ^[a-z][a-z0-9_-]*$
 )
 
+// validSHA256Archs is the set of allowed arch keys in a sha256 map.
+var validSHA256Archs = map[string]bool{
+	"amd64":   true,
+	"arm64":   true,
+	"arm":     true,
+	"386":     true,
+	"riscv64": true,
+}
+
 func (c *Config) validateExternalTools() error {
 	for i, t := range c.ExternalTools {
 		if !reToolName.MatchString(t.Name) {
@@ -489,8 +573,28 @@ func (c *Config) validateExternalTools() error {
 		if !strings.HasPrefix(t.URL, "https://") {
 			return fmt.Errorf("external_tools[%d] %q: url must start with https://", i, t.Name)
 		}
-		if !reSHA256.MatchString(t.SHA256) {
-			return fmt.Errorf("external_tools[%d] %q: sha256 must be 64 lowercase hex chars", i, t.Name)
+		// Exactly one of SHA256 or SHA256Map must be set.
+		hasSingle := t.SHA256 != ""
+		hasMap := len(t.SHA256Map) > 0
+		if !hasSingle && !hasMap {
+			return fmt.Errorf("external_tools[%d] %q: sha256 must be set (string or arch map)", i, t.Name)
+		}
+		if hasSingle && hasMap {
+			return fmt.Errorf("external_tools[%d] %q: sha256 and sha256map are mutually exclusive", i, t.Name)
+		}
+		if hasSingle {
+			if !reSHA256.MatchString(t.SHA256) {
+				return fmt.Errorf("external_tools[%d] %q: sha256 must be 64 lowercase hex chars", i, t.Name)
+			}
+		} else {
+			for arch, sum := range t.SHA256Map {
+				if !validSHA256Archs[arch] {
+					return fmt.Errorf("external_tools[%d] %q: sha256 map key %q is not valid; must be one of: amd64, arm64, arm, 386, riscv64", i, t.Name, arch)
+				}
+				if !reSHA256.MatchString(sum) {
+					return fmt.Errorf("external_tools[%d] %q: sha256 map value for %q must be 64 lowercase hex chars", i, t.Name, arch)
+				}
+			}
 		}
 		if !filepath.IsAbs(t.InstallPath) {
 			return fmt.Errorf("external_tools[%d] %q: install_path must be absolute", i, t.Name)

@@ -51,14 +51,15 @@ type HealthcheckOpts struct {
 
 // Step is one build instruction within a stage.
 type Step struct {
-	Type            StepType         `json:"type"`
-	Args            []string         `json:"args,omitempty"`
-	CacheMount      *CacheMount      `json:"cache_mount,omitempty"`
-	SecretMounts    []SecretMount    `json:"secret_mounts,omitempty"`
-	CopyFrom        *CopyFrom        `json:"copy_from,omitempty"`
-	Link            bool             `json:"link,omitempty"`
-	ShellForm       bool             `json:"shell_form,omitempty"` // emit CMD/ENTRYPOINT as shell-form (supports env-var expansion)
-	HealthcheckOpts *HealthcheckOpts `json:"healthcheck_opts,omitempty"`
+	Type            StepType          `json:"type"`
+	Args            []string          `json:"args,omitempty"`
+	CacheMount      *CacheMount       `json:"cache_mount,omitempty"`
+	SecretMounts    []SecretMount     `json:"secret_mounts,omitempty"`
+	CopyFrom        *CopyFrom         `json:"copy_from,omitempty"`
+	Link            bool              `json:"link,omitempty"`
+	ShellForm       bool              `json:"shell_form,omitempty"` // emit CMD/ENTRYPOINT as shell-form (supports env-var expansion)
+	HealthcheckOpts *HealthcheckOpts  `json:"healthcheck_opts,omitempty"`
+	SHA256Map       map[string]string `json:"sha256map,omitempty"` // StepFetchTool: per-arch sha256; nil = use Args[2] single sha
 }
 
 // CacheMount describes a BuildKit cache mount for a RUN step.

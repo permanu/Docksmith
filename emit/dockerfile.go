@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/permanu/docksmith/core"
@@ -139,7 +140,11 @@ func writeStep(b *strings.Builder, step core.Step) {
 			if len(step.Args) >= 5 {
 				format = step.Args[4]
 			}
-			fmt.Fprintf(b, "RUN %s\n", fetchToolRun(step.Args[0], step.Args[1], step.Args[2], step.Args[3], format))
+			if len(step.SHA256Map) > 0 {
+				fmt.Fprintf(b, "RUN %s\n", fetchToolRunMultiArch(step.Args[0], step.Args[1], step.SHA256Map, step.Args[3], format))
+			} else {
+				fmt.Fprintf(b, "RUN %s\n", fetchToolRun(step.Args[0], step.Args[1], step.Args[2], step.Args[3], format))
+			}
 		}
 	}
 }
@@ -223,6 +228,86 @@ func fetchToolRun(name, url, sha256, installPath, format string) string {
 		fmt.Sprintf(`  rm %s`, archive),
 	}
 	return strings.Join(lines, "\n")
+}
+
+// fetchToolRunMultiArch builds the shell command for a StepFetchTool step when
+// per-arch sha256 values are provided. It emits a case statement keyed on
+// $(uname -m) → normalised arch, then selects the matching sha256 at build time.
+// Arch keys are sorted alphabetically for deterministic output.
+func fetchToolRunMultiArch(name, url string, sha256Map map[string]string, installPath, format string) string {
+	if format == "" {
+		format = "tar.gz"
+	}
+
+	// Sort arch keys for determinism.
+	archs := make([]string, 0, len(sha256Map))
+	for arch := range sha256Map {
+		archs = append(archs, arch)
+	}
+	sort.Strings(archs)
+
+	// Build case arms.
+	caseArms := make([]string, 0, len(archs)+1)
+	for _, arch := range archs {
+		caseArms = append(caseArms, fmt.Sprintf(`    %s) sha256="%s" ;;`, arch, sha256Map[arch]))
+	}
+	caseArms = append(caseArms, `    *) echo "unsupported arch $arch" >&2; exit 1 ;;`)
+
+	header := []string{
+		`set -eux; \`,
+		`  arch="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"; \`,
+		`  case "$arch" in \`,
+	}
+	armLines := make([]string, len(caseArms))
+	for i, arm := range caseArms {
+		armLines[i] = "  " + arm + ` \`
+	}
+	footer := []string{
+		`  esac; \`,
+		fmt.Sprintf(`  url="%s"; \`, url),
+	}
+
+	if format == "binary" {
+		dest := filepath.Join(installPath, name)
+		tail := []string{
+			fmt.Sprintf(`  mkdir -p %s; \`, installPath),
+			fmt.Sprintf(`  curl -fsSL -o %s "$url"; \`, dest),
+			fmt.Sprintf(`  echo "$sha256  %s" | sha256sum -c -; \`, dest),
+			fmt.Sprintf(`  chmod +x %s`, dest),
+		}
+		all := append(header, armLines...)
+		all = append(all, footer...)
+		all = append(all, tail...)
+		return strings.Join(all, "\n")
+	}
+
+	// archive formats
+	var ext string
+	if format == "zip" {
+		ext = ".zip"
+	} else {
+		ext = ".tar.gz"
+	}
+	archive := fmt.Sprintf("/tmp/%s%s", name, ext)
+
+	var extractLine string
+	if format == "zip" {
+		extractLine = fmt.Sprintf(`  unzip -o %s -d %s; \`, archive, installPath)
+	} else {
+		extractLine = fmt.Sprintf(`  tar -xzf %s -C %s; \`, archive, installPath)
+	}
+
+	tail := []string{
+		fmt.Sprintf(`  curl -fsSL -o %s "$url"; \`, archive),
+		fmt.Sprintf(`  echo "$sha256  %s" | sha256sum -c -; \`, archive),
+		fmt.Sprintf(`  mkdir -p %s; \`, installPath),
+		extractLine,
+		fmt.Sprintf(`  rm %s`, archive),
+	}
+	all := append(header, armLines...)
+	all = append(all, footer...)
+	all = append(all, tail...)
+	return strings.Join(all, "\n")
 }
 
 func writeRun(b *strings.Builder, step core.Step) {

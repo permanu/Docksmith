@@ -10,6 +10,12 @@ import (
 	"github.com/permanu/docksmith/plan"
 )
 
+// sha256 constants shared across tests.
+const (
+	sha256Amd64 = "c12b889e3349f0e5610aec32fe327e5a6911a0e472754a0c381c30c7c0630e88"
+	sha256Arm64 = "b76308f558d50d006add507f3ab86afc1147644519dd327f7f5fac6d02d4f595"
+)
+
 func TestExternalToolEmission(t *testing.T) {
 	const (
 		toolName    = "migrate"
@@ -225,6 +231,153 @@ func TestExternalToolFormat_DefaultIsTargz(t *testing.T) {
 	}
 }
 
+// TestExternalToolPerArchBinary verifies that a binary-format tool with SHA256Map
+// emits a case statement with per-arch sha256 entries in alphabetical order.
+func TestExternalToolPerArchBinary(t *testing.T) {
+	const (
+		toolName    = "atlas"
+		toolURL     = "https://release.ariga.io/atlas/atlas-linux-${arch}-v1.2.0"
+		installPath = "/app/bin"
+	)
+
+	fw := &core.Framework{Name: "go", GoVersion: "1.22"}
+	p, err := plan.Plan(fw,
+		plan.WithStartCommand("./app"),
+		plan.WithExternalTools([]config.ExternalTool{
+			{
+				Name:        toolName,
+				URL:         toolURL,
+				SHA256Map:   map[string]string{"amd64": sha256Amd64, "arm64": sha256Arm64},
+				InstallPath: installPath,
+				Format:      "binary",
+			},
+		}),
+	)
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	df := emit.EmitDockerfile(p)
+
+	// Must contain both sha256 values.
+	if !strings.Contains(df, sha256Amd64) {
+		t.Errorf("Dockerfile missing amd64 sha256\nDockerfile:\n%s", df)
+	}
+	if !strings.Contains(df, sha256Arm64) {
+		t.Errorf("Dockerfile missing arm64 sha256\nDockerfile:\n%s", df)
+	}
+
+	// Must contain a case statement.
+	if !strings.Contains(df, `case "$arch" in`) {
+		t.Errorf("Dockerfile missing case statement\nDockerfile:\n%s", df)
+	}
+	if !strings.Contains(df, "esac") {
+		t.Errorf("Dockerfile missing esac\nDockerfile:\n%s", df)
+	}
+
+	// amd64 must appear before arm64 (alphabetical sort).
+	amd64Pos := strings.Index(df, sha256Amd64)
+	arm64Pos := strings.Index(df, sha256Arm64)
+	if amd64Pos >= arm64Pos {
+		t.Errorf("expected amd64 sha256 before arm64 sha256 (alphabetical); amd64@%d arm64@%d", amd64Pos, arm64Pos)
+	}
+
+	// Binary format: direct curl to dest, chmod +x, no tar/unzip.
+	if !strings.Contains(df, "/app/bin/atlas") {
+		t.Errorf("Dockerfile missing binary dest /app/bin/atlas\nDockerfile:\n%s", df)
+	}
+	if !strings.Contains(df, "chmod +x") {
+		t.Errorf("Dockerfile missing chmod +x\nDockerfile:\n%s", df)
+	}
+	if strings.Contains(df, "tar -xzf") {
+		t.Errorf("Dockerfile must not contain tar extraction for binary format\nDockerfile:\n%s", df)
+	}
+
+	// Must use $sha256 variable (not a hardcoded value in the sha256sum line).
+	if !strings.Contains(df, `echo "$sha256`) {
+		t.Errorf("Dockerfile must use $sha256 variable in sha256sum line\nDockerfile:\n%s", df)
+	}
+}
+
+// TestExternalToolPerArchTarGz verifies that a tar.gz tool with SHA256Map
+// emits a case statement and tar extraction (no chmod).
+func TestExternalToolPerArchTarGz(t *testing.T) {
+	const (
+		toolURL     = "https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-${arch}.tar.gz"
+		installPath = "/usr/local/bin"
+	)
+
+	fw := &core.Framework{Name: "go", GoVersion: "1.22"}
+	p, err := plan.Plan(fw,
+		plan.WithStartCommand("./app"),
+		plan.WithExternalTools([]config.ExternalTool{
+			{
+				Name:        "migrate",
+				URL:         toolURL,
+				SHA256Map:   map[string]string{"amd64": sha256Amd64, "arm64": sha256Arm64},
+				InstallPath: installPath,
+			},
+		}),
+	)
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	df := emit.EmitDockerfile(p)
+
+	if !strings.Contains(df, `case "$arch" in`) {
+		t.Errorf("Dockerfile missing case statement\nDockerfile:\n%s", df)
+	}
+	if !strings.Contains(df, sha256Amd64) {
+		t.Errorf("Dockerfile missing amd64 sha256\nDockerfile:\n%s", df)
+	}
+	if !strings.Contains(df, sha256Arm64) {
+		t.Errorf("Dockerfile missing arm64 sha256\nDockerfile:\n%s", df)
+	}
+	if !strings.Contains(df, "tar -xzf") {
+		t.Errorf("Dockerfile missing tar extraction\nDockerfile:\n%s", df)
+	}
+	if strings.Contains(df, "chmod +x") {
+		t.Errorf("Dockerfile must not contain chmod for tar.gz format\nDockerfile:\n%s", df)
+	}
+}
+
+// TestExternalToolSingleShaUnchanged verifies that single-sha (string) tools
+// produce output identical to the pre-SHA256Map baseline (no case statement).
+func TestExternalToolSingleShaUnchanged(t *testing.T) {
+	const (
+		toolURL     = "https://release.ariga.io/atlas/atlas-linux-${arch}-v1.2.0"
+		installPath = "/app/bin"
+	)
+
+	fw := &core.Framework{Name: "go", GoVersion: "1.22"}
+	p, err := plan.Plan(fw,
+		plan.WithStartCommand("./app"),
+		plan.WithExternalTools([]config.ExternalTool{
+			{
+				Name:        "atlas",
+				URL:         toolURL,
+				SHA256:      sha256Amd64,
+				InstallPath: installPath,
+				Format:      "binary",
+			},
+		}),
+	)
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+
+	df := emit.EmitDockerfile(p)
+
+	// No case statement — single sha is embedded directly.
+	if strings.Contains(df, `case "$arch" in`) {
+		t.Errorf("single-sha tool must not emit case statement\nDockerfile:\n%s", df)
+	}
+	if !strings.Contains(df, sha256Amd64) {
+		t.Errorf("Dockerfile missing sha256\nDockerfile:\n%s", df)
+	}
+}
+
 func TestExternalToolValidation(t *testing.T) {
 	cases := []struct {
 		name string
@@ -239,6 +392,17 @@ func TestExternalToolValidation(t *testing.T) {
 				SHA256:      "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
 				InstallPath: "/usr/local/bin",
 				Stage:       "runtime",
+			},
+			ok: true,
+		},
+		{
+			name: "valid sha256 map",
+			tool: config.ExternalTool{
+				Name:        "mytool",
+				URL:         "https://example.com/mytool-linux-${arch}",
+				SHA256Map:   map[string]string{"amd64": sha256Amd64, "arm64": sha256Arm64},
+				InstallPath: "/usr/local/bin",
+				Format:      "binary",
 			},
 			ok: true,
 		},
@@ -323,6 +487,47 @@ func TestExternalToolValidation(t *testing.T) {
 				SHA256:      "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
 				InstallPath: "/usr/local/bin",
 				Stage:       "dev",
+			},
+			ok: false,
+		},
+		// sha256 map validation cases
+		{
+			name: "sha256 missing both",
+			tool: config.ExternalTool{
+				Name:        "mytool",
+				URL:         "https://example.com/tool.tar.gz",
+				InstallPath: "/usr/local/bin",
+			},
+			ok: false,
+		},
+		{
+			name: "sha256 both set",
+			tool: config.ExternalTool{
+				Name:        "mytool",
+				URL:         "https://example.com/mytool-linux-${arch}",
+				SHA256:      "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+				SHA256Map:   map[string]string{"amd64": sha256Amd64},
+				InstallPath: "/usr/local/bin",
+			},
+			ok: false,
+		},
+		{
+			name: "sha256 map invalid arch key",
+			tool: config.ExternalTool{
+				Name:        "mytool",
+				URL:         "https://example.com/mytool-linux-${arch}",
+				SHA256Map:   map[string]string{"x86_64": sha256Amd64},
+				InstallPath: "/usr/local/bin",
+			},
+			ok: false,
+		},
+		{
+			name: "sha256 map value not 64 hex",
+			tool: config.ExternalTool{
+				Name:        "mytool",
+				URL:         "https://example.com/mytool-linux-${arch}",
+				SHA256Map:   map[string]string{"amd64": "tooshort"},
+				InstallPath: "/usr/local/bin",
 			},
 			ok: false,
 		},
