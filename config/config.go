@@ -38,8 +38,15 @@ type BuildConfig struct {
 
 // StartConfig groups start-time overrides.
 type StartConfig struct {
-	Command    string   `toml:"command"    yaml:"command"    json:"command,omitempty"`
-	Entrypoint []string `toml:"entrypoint" yaml:"entrypoint" json:"entrypoint,omitempty"`
+	Command    string   `toml:"command"           yaml:"command"           json:"command,omitempty"`
+	Entrypoint []string `toml:"entrypoint"        yaml:"entrypoint"        json:"entrypoint,omitempty"`
+	// EntrypointScript is a path to a shell script relative to the build context.
+	// When set, the script is copied into the image as /entrypoint.sh with execute
+	// permission and wired as ENTRYPOINT. Start.Command becomes CMD (passed as
+	// arguments to the script). Because the user's script takes over PID 1, tini
+	// wrapping is bypassed — the script is responsible for signal forwarding and
+	// zombie reaping.
+	EntrypointScript string `toml:"entrypoint_script" yaml:"entrypoint_script" json:"entrypoint_script,omitempty"`
 }
 
 // InstallConfig groups install-time overrides.
@@ -257,6 +264,9 @@ func (c *Config) Validate() error {
 	if err := c.validateLdFlags(); err != nil {
 		return err
 	}
+	if err := c.validateEntrypointScript(); err != nil {
+		return err
+	}
 	return c.validateSecrets()
 }
 
@@ -270,6 +280,20 @@ func (c *Config) validateLdFlags() error {
 		if strings.ContainsAny(v, "\"\n") {
 			return fmt.Errorf("build.ldflags: value for key %q must not contain '\"' or newline", k)
 		}
+	}
+	return nil
+}
+
+func (c *Config) validateEntrypointScript() error {
+	s := c.Start.EntrypointScript
+	if s == "" {
+		return nil
+	}
+	if filepath.IsAbs(s) {
+		return fmt.Errorf("start.entrypoint_script: must be a relative path, got absolute %q", s)
+	}
+	if containsDotDot(s) {
+		return fmt.Errorf("start.entrypoint_script: path traversal not allowed in %q", s)
 	}
 	return nil
 }

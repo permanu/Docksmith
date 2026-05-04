@@ -1,0 +1,9 @@
+runtime = "go"
+version = "1.23"
+
+[start]
+command = "./server"
+entrypoint_script = "entrypoint.sh"
+
+[runtime_config]
+expose = 8080

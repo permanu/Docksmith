@@ -173,7 +173,20 @@ func applyPlanOverrides(plan *core.BuildPlan, cfg *planConfig) {
 		}
 	}
 
-	if cfg.Entrypoint != nil {
+	if cfg.EntrypointScript != "" {
+		// Custom entrypoint script: copy the script into the runtime stage,
+		// make it executable, and wire it as ENTRYPOINT. Tini is bypassed —
+		// the script takes PID-1 responsibility (signal forwarding + zombie reaping).
+		// Start.Command becomes CMD so the script receives it as positional args.
+		removeSteps(last, core.StepEntrypoint)
+		last.Steps = append(last.Steps,
+			core.Step{
+				Type: core.StepCopy,
+				Args: []string{"--chmod=755", cfg.EntrypointScript, "/entrypoint.sh"},
+			},
+			core.Step{Type: core.StepEntrypoint, Args: []string{"/entrypoint.sh"}},
+		)
+	} else if cfg.Entrypoint != nil {
 		removeSteps(last, core.StepEntrypoint)
 		last.Steps = append(last.Steps, core.Step{Type: core.StepEntrypoint, Args: cfg.Entrypoint})
 	}
