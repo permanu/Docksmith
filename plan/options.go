@@ -33,6 +33,7 @@ type PlanConfig struct {
 	RuntimeAssets     []core.AssetCopy
 	ExternalTools     []config.ExternalTool
 	Binaries          []config.Binary
+	UseGoWork         bool // copy go.work* into builder stage for workspace builds
 }
 
 // planConfig is an internal alias kept for transition clarity.
@@ -183,6 +184,14 @@ func WithExternalTools(tools []config.ExternalTool) PlanOption {
 // Only honoured by the Go plan builder; ignored for all other runtimes.
 func WithBinaries(bins []config.Binary) PlanOption {
 	return planOptionFunc(func(c *planConfig) { c.Binaries = bins })
+}
+
+// WithGoWork signals that a go.work (and optionally go.work.sum) file exists
+// in the build context root. The Go builder stage will COPY go.work* alongside
+// go.mod/go.sum so that workspace-based multi-module builds succeed.
+// Only honoured by the Go plan builder; ignored for all other runtimes.
+func WithGoWork() PlanOption {
+	return planOptionFunc(func(c *planConfig) { c.UseGoWork = true })
 }
 
 // ResolvePlanConfig resolves a slice of PlanOption into a PlanConfig.

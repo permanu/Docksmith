@@ -256,6 +256,10 @@ func applyPlanOverrides(plan *core.BuildPlan, cfg *planConfig) error {
 		applyExternalTools(plan, cfg.ExternalTools)
 	}
 
+	if cfg.UseGoWork {
+		applyGoWork(plan)
+	}
+
 	if len(cfg.RuntimeSystemDeps) > 0 {
 		if err := applyRuntimeSystemDeps(last, cfg.RuntimeSystemDeps); err != nil {
 			return err
@@ -568,6 +572,43 @@ func applyBinaries(plan *core.BuildPlan, bins []config.Binary, setCmd bool) {
 		})
 	}
 	// When setCmd is false the caller already wrote a CMD via StartCmd — leave it.
+}
+
+// applyGoWork patches the builder stage's go.mod COPY step to include go.work*
+// alongside go.mod and go.sum*. This is required for projects that use Go
+// workspaces (go.work) where sub-modules rely on workspace replace directives.
+// It is a no-op when no builder stage is found or no go.mod COPY step exists.
+func applyGoWork(plan *core.BuildPlan) {
+	for i := range plan.Stages {
+		if plan.Stages[i].Name != "builder" {
+			continue
+		}
+		for j := range plan.Stages[i].Steps {
+			step := &plan.Stages[i].Steps[j]
+			if step.Type != core.StepCopy {
+				continue
+			}
+			// Look for the COPY step that copies go.mod (and go.sum*).
+			// Its Args slice ends with "./" destination and starts with "go.mod".
+			if len(step.Args) >= 2 && step.Args[0] == "go.mod" {
+				// Append go.work* before the destination (last arg).
+				dst := step.Args[len(step.Args)-1]
+				srcs := step.Args[:len(step.Args)-1]
+				// Only add go.work* if not already present.
+				hasGoWork := false
+				for _, s := range srcs {
+					if s == "go.work*" {
+						hasGoWork = true
+						break
+					}
+				}
+				if !hasGoWork {
+					step.Args = append(srcs, "go.work*", dst)
+				}
+				return
+			}
+		}
+	}
 }
 
 // applyExternalTools injects StepFetchTool steps into the appropriate stage.
