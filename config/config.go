@@ -14,6 +14,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// AssetCopy describes a file or directory to copy into the runtime stage.
+type AssetCopy struct {
+	Src string `toml:"src" yaml:"src" json:"src"`
+	Dst string `toml:"dst" yaml:"dst" json:"dst"`
+}
+
 // Config represents a user-provided docksmith.toml/yaml/json configuration.
 type Config struct {
 	Runtime        string                  `toml:"runtime"          yaml:"runtime"          json:"runtime"`
@@ -27,6 +33,7 @@ type Config struct {
 	Install        InstallConfig           `toml:"install"          yaml:"install"          json:"install,omitempty"`
 	RuntimeConfig  RuntimeCfg              `toml:"runtime_config"   yaml:"runtime_config"   json:"runtime_config,omitempty"`
 	Secrets        map[string]SecretConfig `toml:"secrets"          yaml:"secrets"          json:"secrets,omitempty"`
+	RuntimeAssets  []AssetCopy             `toml:"runtime_assets"   yaml:"runtime_assets"   json:"runtime_assets,omitempty"`
 }
 
 // BuildConfig groups build-time overrides.
@@ -199,6 +206,7 @@ type rawConfig struct {
 	Install        InstallConfig           `toml:"install"         yaml:"install"         json:"install,omitempty"`
 	RuntimeConfig  rawRuntimeCfg           `toml:"runtime_config"  yaml:"runtime_config"  json:"runtime_config,omitempty"`
 	Secrets        map[string]SecretConfig `toml:"secrets"         yaml:"secrets"         json:"secrets,omitempty"`
+	RuntimeAssets  []AssetCopy             `toml:"runtime_assets"  yaml:"runtime_assets"  json:"runtime_assets,omitempty"`
 }
 
 // ParseConfig parses raw config data based on the file extension in name.
@@ -244,6 +252,7 @@ func ParseConfig(name string, data []byte) (*Config, error) {
 		Install:        raw.Install,
 		RuntimeConfig:  rc,
 		Secrets:        raw.Secrets,
+		RuntimeAssets:  raw.RuntimeAssets,
 	}, nil
 }
 
@@ -265,6 +274,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.validateEntrypointScript(); err != nil {
+		return err
+	}
+	if err := c.validateRuntimeAssets(); err != nil {
 		return err
 	}
 	return c.validateSecrets()
@@ -294,6 +306,24 @@ func (c *Config) validateEntrypointScript() error {
 	}
 	if containsDotDot(s) {
 		return fmt.Errorf("start.entrypoint_script: path traversal not allowed in %q", s)
+	}
+	return nil
+}
+
+func (c *Config) validateRuntimeAssets() error {
+	for i, a := range c.RuntimeAssets {
+		if a.Src == "" {
+			return fmt.Errorf("runtime_assets[%d]: src must not be empty", i)
+		}
+		if a.Dst == "" {
+			return fmt.Errorf("runtime_assets[%d]: dst must not be empty", i)
+		}
+		if containsDotDot(a.Src) || filepath.IsAbs(a.Src) {
+			return fmt.Errorf("runtime_assets[%d]: src must be a relative path with no '..' components", i)
+		}
+		if !filepath.IsAbs(a.Dst) {
+			return fmt.Errorf("runtime_assets[%d]: dst must be an absolute path", i)
+		}
 	}
 	return nil
 }

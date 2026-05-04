@@ -47,6 +47,7 @@ type Step = core.Step
 type CacheMount = core.CacheMount
 type SecretMount = core.SecretMount
 type CopyFrom = core.CopyFrom
+type AssetCopy = core.AssetCopy
 
 // Config types
 type Config = config.Config
@@ -55,6 +56,7 @@ type StartConfig = config.StartConfig
 type InstallConfig = config.InstallConfig
 type RuntimeCfg = config.RuntimeCfg
 type SecretConfig = config.SecretConfig
+type ConfigAssetCopy = config.AssetCopy
 
 // Detect types
 type NamedDetector = detect.NamedDetector
@@ -147,6 +149,7 @@ var (
 	WithContextRoot         = plan.WithContextRoot
 	WithLdFlags             = plan.WithLdFlags
 	WithImageFamily         = plan.WithImageFamily
+	WithRuntimeAssets       = plan.WithRuntimeAssets
 )
 
 var ResolveDockerTag = plan.ResolveDockerTag
@@ -473,6 +476,14 @@ func ConfigToPlanOptions(c *Config) ([]PlanOption, error) {
 
 	if len(c.Build.LdFlags) > 0 {
 		opts = append(opts, WithLdFlags(c.Build.LdFlags))
+	}
+
+	if len(c.RuntimeAssets) > 0 {
+		assets := make([]core.AssetCopy, len(c.RuntimeAssets))
+		for i, a := range c.RuntimeAssets {
+			assets[i] = core.AssetCopy{Src: a.Src, Dst: a.Dst}
+		}
+		opts = append(opts, WithRuntimeAssets(assets))
 	}
 
 	return opts, nil

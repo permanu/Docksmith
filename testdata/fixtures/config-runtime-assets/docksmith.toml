@@ -1,0 +1,13 @@
+runtime = "go"
+version = "1.22"
+
+[start]
+command = "./app"
+
+[[runtime_assets]]
+src = "configs/app.yaml"
+dst = "/app/configs/app.yaml"
+
+[[runtime_assets]]
+src = "static/index.html"
+dst = "/app/static/index.html"

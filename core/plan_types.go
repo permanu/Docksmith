@@ -70,6 +70,12 @@ type CopyFrom struct {
 	Dst   string `json:"dst"`
 }
 
+// AssetCopy describes a host file or directory to COPY into the runtime stage.
+type AssetCopy struct {
+	Src string `toml:"src" yaml:"src" json:"src"`
+	Dst string `toml:"dst" yaml:"dst" json:"dst"`
+}
+
 // Validate checks plan invariants before emission.
 func (p *BuildPlan) Validate() error {
 	if len(p.Stages) == 0 {

@@ -27,6 +27,7 @@ type PlanConfig struct {
 	ContextRoot      *string
 	LdFlags          map[string]string
 	EntrypointScript string // path relative to build context; empty = not set
+	RuntimeAssets    []core.AssetCopy
 }
 
 // planConfig is an internal alias kept for transition clarity.
@@ -148,6 +149,11 @@ func WithLdFlags(flags map[string]string) PlanOption {
 // When unset the runtime's default is used (Go→distroless, Node→alpine, Python→slim).
 func WithImageFamily(family string) PlanOption {
 	return planOptionFunc(func(c *planConfig) { c.ImageFamily = family })
+}
+
+// WithRuntimeAssets appends COPY <src> <dst> steps into the runtime stage.
+func WithRuntimeAssets(assets []core.AssetCopy) PlanOption {
+	return planOptionFunc(func(c *planConfig) { c.RuntimeAssets = assets })
 }
 
 // ResolvePlanConfig resolves a slice of PlanOption into a PlanConfig.
