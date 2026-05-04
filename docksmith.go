@@ -52,6 +52,7 @@ type AssetCopy = core.AssetCopy
 // Config types
 type Config = config.Config
 type BuildConfig = config.BuildConfig
+type Binary = config.Binary
 type StartConfig = config.StartConfig
 type InstallConfig = config.InstallConfig
 type RuntimeCfg = config.RuntimeCfg
@@ -152,6 +153,7 @@ var (
 	WithImageFamily         = plan.WithImageFamily
 	WithRuntimeAssets       = plan.WithRuntimeAssets
 	WithExternalTools       = plan.WithExternalTools
+	WithBinaries            = plan.WithBinaries
 )
 
 var ResolveDockerTag = plan.ResolveDockerTag
@@ -490,6 +492,10 @@ func ConfigToPlanOptions(c *Config) ([]PlanOption, error) {
 
 	if len(c.ExternalTools) > 0 {
 		opts = append(opts, WithExternalTools(c.ExternalTools))
+	}
+
+	if len(c.Build.Binaries) > 0 {
+		opts = append(opts, WithBinaries(c.Build.Binaries))
 	}
 
 	return opts, nil

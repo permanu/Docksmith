@@ -207,6 +207,11 @@ func applyPlanOverrides(plan *core.BuildPlan, cfg *planConfig) {
 		applySecrets(plan, cfg.Secrets)
 	}
 
+	if len(cfg.Binaries) > 0 {
+		// StartCmd takes precedence over the default CMD set by applyBinaries.
+		applyBinaries(plan, cfg.Binaries, cfg.StartCmd == nil)
+	}
+
 	if len(cfg.LdFlags) > 0 {
 		applyLdFlags(plan, cfg.LdFlags)
 	}
@@ -375,10 +380,90 @@ func applyLdFlags(plan *core.BuildPlan, flags map[string]string) {
 				// The hardcoded form is: -ldflags="-w -s"
 				// We need to produce:    -ldflags="-w -s -X k=v ..."
 				step.Args[k] = strings.Replace(arg, `-ldflags="-w -s"`, fmt.Sprintf(`-ldflags="-w -s%s"`, suffix), 1)
-				return
 			}
 		}
 	}
+}
+
+// applyBinaries rewrites the Go builder stage to emit one RUN go build step per
+// binary and adds corresponding COPY --from=builder steps to the runtime stage.
+// When setCmd is true it replaces the CMD in the runtime stage to use the first
+// binary's output name. Pass setCmd=false when Start.Command will override CMD later.
+// It is a no-op when the plan has no builder stage named "builder".
+func applyBinaries(plan *core.BuildPlan, bins []config.Binary, setCmd bool) {
+	builderIdx := -1
+	runtimeIdx := -1
+	for i, s := range plan.Stages {
+		if s.Name == "builder" {
+			builderIdx = i
+		}
+		if s.Name == "runtime" {
+			runtimeIdx = i
+		}
+	}
+	if builderIdx < 0 || runtimeIdx < 0 {
+		return
+	}
+
+	builder := &plan.Stages[builderIdx]
+	runtime := &plan.Stages[runtimeIdx]
+
+	// Find and remove the existing single go build RUN step, preserving everything else.
+	// We need the cache mount from the go mod download step to know the pattern.
+	newBuilderSteps := make([]core.Step, 0, len(builder.Steps)+len(bins))
+	for _, step := range builder.Steps {
+		if step.Type == core.StepRun && len(step.Args) > 0 && strings.Contains(step.Args[0], "go build") {
+			// Replace this single-binary build step with one step per binary.
+			for _, b := range bins {
+				outName := b.OutputName
+				if outName == "" {
+					outName = b.Name
+				}
+				newBuilderSteps = append(newBuilderSteps, core.Step{
+					Type: core.StepRun,
+					Args: []string{fmt.Sprintf(`CGO_ENABLED=0 go build -ldflags="-w -s" -o /out/%s %s`, outName, b.Path)},
+				})
+			}
+		} else {
+			newBuilderSteps = append(newBuilderSteps, step)
+		}
+	}
+	builder.Steps = newBuilderSteps
+
+	// Remove the existing single COPY --from=builder step from runtime stage.
+	newRuntimeSteps := make([]core.Step, 0, len(runtime.Steps)+len(bins))
+	for _, step := range runtime.Steps {
+		if step.Type == core.StepCopyFrom && step.CopyFrom != nil && step.CopyFrom.Stage == "builder" {
+			// Replace with one COPY per binary, inserted here.
+			for _, b := range bins {
+				outName := b.OutputName
+				if outName == "" {
+					outName = b.Name
+				}
+				newRuntimeSteps = append(newRuntimeSteps, core.Step{
+					Type:     core.StepCopyFrom,
+					CopyFrom: &core.CopyFrom{Stage: "builder", Src: fmt.Sprintf("/out/%s", outName), Dst: fmt.Sprintf("/usr/local/bin/%s", outName)},
+				})
+			}
+		} else {
+			newRuntimeSteps = append(newRuntimeSteps, step)
+		}
+	}
+	runtime.Steps = newRuntimeSteps
+
+	if setCmd {
+		// No StartCmd override: set CMD to first binary's output name.
+		firstOutName := bins[0].OutputName
+		if firstOutName == "" {
+			firstOutName = bins[0].Name
+		}
+		removeSteps(runtime, core.StepCmd)
+		runtime.Steps = append(runtime.Steps, core.Step{
+			Type: core.StepCmd,
+			Args: []string{fmt.Sprintf("/usr/local/bin/%s", firstOutName)},
+		})
+	}
+	// When setCmd is false the caller already wrote a CMD via StartCmd — leave it.
 }
 
 // applyExternalTools injects StepFetchTool steps into the appropriate stage.
