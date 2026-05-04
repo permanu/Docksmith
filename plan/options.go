@@ -10,22 +10,23 @@ import (
 // A nil pointer means "not set — use default". A non-nil pointer (even &"")
 // means "explicitly set — use this value, possibly disabling the feature".
 type PlanConfig struct {
-	User         *string
-	Healthcheck  *string
-	RuntimeImage *string
-	BaseImage    *string
-	ImageFamily  string // "alpine", "slim", or "distroless"; empty = use runtime default
-	Entrypoint   []string
-	ExtraEnv     map[string]string
-	Expose       *int
-	InstallCmd   *string
-	BuildCmd     *string
-	StartCmd     *string
-	SystemDeps   []string
-	NoBuildCache bool
-	Secrets      []core.SecretMount
-	ContextRoot  *string
-	LdFlags      map[string]string
+	User             *string
+	Healthcheck      *string
+	RuntimeImage     *string
+	BaseImage        *string
+	ImageFamily      string // "alpine", "slim", or "distroless"; empty = use runtime default
+	Entrypoint       []string
+	ExtraEnv         map[string]string
+	Expose           *int
+	InstallCmd       *string
+	BuildCmd         *string
+	StartCmd         *string
+	SystemDeps       []string
+	NoBuildCache     bool
+	Secrets          []core.SecretMount
+	ContextRoot      *string
+	LdFlags          map[string]string
+	EntrypointScript string // path relative to build context; empty = not set
 }
 
 // planConfig is an internal alias kept for transition clarity.
@@ -84,6 +85,17 @@ func isValidImageRef(s string) bool {
 
 func WithEntrypoint(args ...string) PlanOption {
 	return planOptionFunc(func(c *planConfig) { c.Entrypoint = args })
+}
+
+// WithEntrypointScript wires a host-side shell script into the image as
+// /entrypoint.sh. The plan emits COPY + chmod + ENTRYPOINT steps into the
+// runtime stage and demotes Start.Command to CMD (so the script receives it
+// as positional arguments). Tini wrapping is bypassed when this option is
+// set — the script takes responsibility for PID 1 signal forwarding and
+// zombie reaping. path must be relative to the build context (no leading /,
+// no .. components).
+func WithEntrypointScript(path string) PlanOption {
+	return planOptionFunc(func(c *planConfig) { c.EntrypointScript = path })
 }
 
 func WithExtraEnv(env map[string]string) PlanOption {

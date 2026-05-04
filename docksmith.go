@@ -135,6 +135,7 @@ var (
 	WithRuntimeImage        = plan.WithRuntimeImage
 	WithBaseImage           = plan.WithBaseImage
 	WithEntrypoint          = plan.WithEntrypoint
+	WithEntrypointScript    = plan.WithEntrypointScript
 	WithExtraEnv            = plan.WithExtraEnv
 	WithExpose              = plan.WithExpose
 	WithInstallCommand      = plan.WithInstallCommand
@@ -428,7 +429,9 @@ func ConfigToPlanOptions(c *Config) ([]PlanOption, error) {
 	if c.Start.Command != "" {
 		opts = append(opts, WithStartCommand(c.Start.Command))
 	}
-	if len(c.Start.Entrypoint) > 0 {
+	if c.Start.EntrypointScript != "" {
+		opts = append(opts, WithEntrypointScript(c.Start.EntrypointScript))
+	} else if len(c.Start.Entrypoint) > 0 {
 		opts = append(opts, WithEntrypoint(c.Start.Entrypoint...))
 	}
 	if c.Install.Command != "" {
