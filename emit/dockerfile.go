@@ -100,7 +100,7 @@ func writeStep(b *strings.Builder, step core.Step) {
 
 	case core.StepEnv:
 		if len(step.Args) == 2 {
-			fmt.Fprintf(b, "ENV %s %s\n",
+			fmt.Fprintf(b, "ENV %s=%s\n",
 				SanitizeDockerfileArg(step.Args[0]),
 				SanitizeDockerfileArg(step.Args[1]))
 		}

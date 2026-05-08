@@ -116,7 +116,7 @@ func TestEmitDockerfile_Python_VenvCopy(t *testing.T) {
 func TestEmitDockerfile_Python_EnvPath(t *testing.T) {
 	plan := mustPythonPlan(t)
 	out := docksmith.EmitDockerfile(plan)
-	assertContains(t, out, "ENV PATH /app/.venv/bin:$PATH")
+	assertContains(t, out, "ENV PATH=/app/.venv/bin:$PATH")
 }
 
 func TestEmitDockerfile_Python_CMD(t *testing.T) {
@@ -220,7 +220,7 @@ func TestEmitDockerfile_StepRun_SecretMount(t *testing.T) {
 
 func TestEmitDockerfile_StepEnv(t *testing.T) {
 	plan := singleStepPlan(docksmith.Step{Type: docksmith.StepEnv, Args: []string{"NODE_ENV", "production"}})
-	assertContains(t, docksmith.EmitDockerfile(plan), "ENV NODE_ENV production")
+	assertContains(t, docksmith.EmitDockerfile(plan), "ENV NODE_ENV=production")
 }
 
 func TestEmitDockerfile_StepArg(t *testing.T) {
