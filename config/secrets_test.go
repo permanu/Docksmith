@@ -159,3 +159,75 @@ target = "/root/.npmrc"
 		t.Errorf("npm target = %q, want %q", cfg.Secrets["npm"].Target, "/root/.npmrc")
 	}
 }
+
+func TestEnv_SensitiveNamesRejected(t *testing.T) {
+	tests := []string{"DATABASE_URL", "PASSWORD"}
+	for _, key := range tests {
+		t.Run(key, func(t *testing.T) {
+			data := `
+runtime = "node"
+[start]
+command = "node index.js"
+[env]
+` + key + ` = "literal-value"
+`
+			cfg, err := ParseConfig("docksmith.toml", []byte(data))
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			err = cfg.Validate()
+			if err == nil {
+				t.Fatal("expected validation error for sensitive env literal")
+			}
+			if !strings.Contains(err.Error(), "[secrets]") {
+				t.Errorf("error should direct users to [secrets], got: %v", err)
+			}
+		})
+	}
+}
+
+func TestEnv_PublicLiteralAllowed(t *testing.T) {
+	data := `
+runtime = "node"
+[start]
+command = "node index.js"
+[env]
+NODE_ENV = "production"
+`
+	cfg, err := ParseConfig("docksmith.toml", []byte(data))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if cfg.Env["NODE_ENV"] != "production" {
+		t.Errorf("NODE_ENV = %q, want production", cfg.Env["NODE_ENV"])
+	}
+}
+
+func TestSecrets_EnvReferencesAcceptedForSensitiveNames(t *testing.T) {
+	data := `
+runtime = "node"
+[start]
+command = "node index.js"
+[secrets]
+[secrets.database]
+env = "DATABASE_URL"
+[secrets.password]
+env = "PASSWORD"
+`
+	cfg, err := ParseConfig("docksmith.toml", []byte(data))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if cfg.Secrets["database"].Env != "DATABASE_URL" {
+		t.Errorf("database env = %q, want DATABASE_URL", cfg.Secrets["database"].Env)
+	}
+	if cfg.Secrets["password"].Env != "PASSWORD" {
+		t.Errorf("password env = %q, want PASSWORD", cfg.Secrets["password"].Env)
+	}
+}

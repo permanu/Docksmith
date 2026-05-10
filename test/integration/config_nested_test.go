@@ -177,7 +177,7 @@ func TestToPlanOptions_ExtraEnv(t *testing.T) {
 	cfg := &docksmith.Config{
 		Runtime: "python",
 		Start:   docksmith.StartConfig{Command: "gunicorn app:app"},
-		Env:     map[string]string{"PORT": "8000"},
+		Env:     map[string]docksmith.PublicEnvLiteral{"PORT": "8000"},
 	}
 	opts, err := docksmith.ConfigToPlanOptions(cfg)
 	if err != nil {

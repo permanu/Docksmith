@@ -127,6 +127,12 @@ func TestManifestFromFrameworkOverrides(t *testing.T) {
 	if m.Runtime.HealthCmd != extras.HealthCmd {
 		t.Errorf("HealthCmd = %q", m.Runtime.HealthCmd)
 	}
+	if len(m.Runtime.RequiredEnv) != 1 || m.Runtime.RequiredEnv[0] != "DATABASE_URL" {
+		t.Errorf("RequiredEnv = %v, want [DATABASE_URL]", m.Runtime.RequiredEnv)
+	}
+	if len(m.Runtime.OptionalEnv) != 1 || m.Runtime.OptionalEnv[0] != "SENTRY_DSN" {
+		t.Errorf("OptionalEnv = %v, want [SENTRY_DSN]", m.Runtime.OptionalEnv)
+	}
 	if m.Framework.Detector != "go-main" {
 		t.Errorf("Detector override failed: %q", m.Framework.Detector)
 	}

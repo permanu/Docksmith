@@ -13,7 +13,9 @@ import (
 	"github.com/permanu/docksmith/detect"
 	"github.com/permanu/docksmith/emit"
 	"github.com/permanu/docksmith/plan"
+	"github.com/permanu/docksmith/policy"
 	"github.com/permanu/docksmith/registry"
+	"github.com/permanu/docksmith/swarm"
 	"github.com/permanu/docksmith/yamldef"
 )
 
@@ -57,6 +59,7 @@ type StartConfig = config.StartConfig
 type InstallConfig = config.InstallConfig
 type RuntimeCfg = config.RuntimeCfg
 type HealthcheckOpts = config.HealthcheckOpts
+type PublicEnvLiteral = config.PublicEnvLiteral
 type SecretConfig = config.SecretConfig
 type ConfigAssetCopy = config.AssetCopy
 type ExternalTool = config.ExternalTool
@@ -91,6 +94,29 @@ const DefaultRegistryURL = registry.DefaultRegistryURL
 
 type RegistryIndex = registry.Index
 type RegistryEntry = registry.Entry
+
+// Swarm deployment rendering types
+type SwarmStack = swarm.Stack
+type SwarmService = swarm.Service
+type SwarmDeploy = swarm.Deploy
+type SwarmResources = swarm.Resources
+type SwarmResourceSpec = swarm.ResourceSpec
+type SwarmRolloutConfig = swarm.RolloutConfig
+type SwarmPlacement = swarm.Placement
+type SwarmHealthcheck = swarm.Healthcheck
+type SwarmSecret = swarm.Secret
+type SwarmConfig = swarm.Config
+type SwarmNetwork = swarm.Network
+type SwarmVolume = swarm.Volume
+type SwarmPort = swarm.Port
+type SwarmMount = swarm.Mount
+type SwarmServiceSecret = swarm.ServiceSecret
+type SwarmServiceConfig = swarm.ServiceConfig
+
+// Production supply-chain policy types
+type ProductionPolicy = policy.ProductionPolicy
+type ImageEvidence = policy.ImageEvidence
+type PolicyViolation = policy.Violation
 
 // ---------------------------------------------------------------------------
 // Sentinel errors — re-export from core
@@ -173,6 +199,12 @@ var BuildxPushArgs = plan.BuildxPushArgs
 var ApplySecretMounts = plan.ApplySecretMounts
 var SecretBuildHint = plan.SecretBuildHint
 var SecretIgnoreFiles = plan.SecretIgnoreFiles
+var StackFromBlueprint = swarm.StackFromBlueprint
+var RenderSwarmStack = swarm.RenderStack
+var RenderBlueprintSwarmStack = swarm.RenderBlueprintStack
+var ValidateProductionPolicy = policy.Validate
+var ValidateProductionManifest = policy.ValidateManifest
+var ValidateProductionImage = policy.ValidateImage
 
 // Registry function aliases
 var FetchRegistryIndex = registry.FetchIndex
@@ -455,7 +487,7 @@ func ConfigToPlanOptions(c *Config) ([]PlanOption, error) {
 		opts = append(opts, WithRuntimeSystemDeps(c.RuntimeConfig.SystemDeps...))
 	}
 	if len(c.Env) > 0 {
-		opts = append(opts, WithExtraEnv(c.Env))
+		opts = append(opts, WithExtraEnv(publicEnvLiteralsToStrings(c.Env)))
 	}
 	if c.RuntimeConfig.Image != "" {
 		opts = append(opts, WithRuntimeImage(c.RuntimeConfig.Image))
@@ -522,4 +554,12 @@ func configSecretsToMounts(secrets map[string]SecretConfig) []core.SecretMount {
 		})
 	}
 	return mounts
+}
+
+func publicEnvLiteralsToStrings(env map[string]PublicEnvLiteral) map[string]string {
+	out := make(map[string]string, len(env))
+	for key, value := range env {
+		out[key] = string(value)
+	}
+	return out
 }

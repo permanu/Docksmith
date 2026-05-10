@@ -3,7 +3,7 @@ docksmith: Go library + CLI for framework detection and Dockerfile generation
 module: github.com/permanu/docksmith
 language: go
 go-version: ">=1.26"
-license: Apache-2.0
+license: MPL-2.0
 dependencies: 2
 runtimes: 12
 detectors: 45
@@ -29,8 +29,8 @@ Go library and CLI that detects your framework and generates a hardened, multi-s
 | **Architecture** | Detect → Plan → Emit (each independently usable) |
 | **Output** | Plain Dockerfile (committable, no lock-in) |
 | **API docs** | [pkg.go.dev/github.com/permanu/docksmith](https://pkg.go.dev/github.com/permanu/docksmith) |
-| **License** | Apache 2.0 |
-| **Status** | Pre-release; internal use at Permanu |
+| **License** | MPL 2.0 |
+| **Status** | Pre-release; MPL-2.0 transition prepared for Permanu use |
 
 ```
 $ docksmith detect .
@@ -381,4 +381,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE).
+Mozilla Public License 2.0. See [LICENSE](LICENSE). Docksmith source files are
+covered by MPL-2.0 even when they do not include per-file license headers; see
+[docs/license-headers.md](docs/license-headers.md).
+
+Docksmith is moving from Apache-2.0 to MPL-2.0 so improvements to Docksmith
+itself stay available while generated Dockerfiles, consuming applications, and
+host platforms can remain under their own licenses. See
+[docs/license-rationale.md](docs/license-rationale.md) for the rationale and
+migration note.

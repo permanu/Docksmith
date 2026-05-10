@@ -42,21 +42,25 @@ type rawExternalTool struct {
 	Format      string `toml:"format"       yaml:"format"       json:"format,omitempty"`
 }
 
+// PublicEnvLiteral is a non-secret value that may be baked into the runtime
+// image as an ENV literal. Secret-bearing runtime values must use SecretConfig.
+type PublicEnvLiteral string
+
 // Config represents a user-provided docksmith.toml/yaml/json configuration.
 type Config struct {
-	Runtime        string                  `toml:"runtime"          yaml:"runtime"          json:"runtime"`
-	Version        string                  `toml:"version"          yaml:"version"          json:"version,omitempty"`
-	PackageManager string                  `toml:"package_manager"  yaml:"package_manager"  json:"package_manager,omitempty"`
-	Dockerfile     string                  `toml:"dockerfile"       yaml:"dockerfile"       json:"dockerfile,omitempty"`
-	ContextRoot    string                  `toml:"context_root"     yaml:"context_root"     json:"context_root,omitempty"`
-	Env            map[string]string       `toml:"env"              yaml:"env"              json:"env,omitempty"`
-	Build          BuildConfig             `toml:"build"            yaml:"build"            json:"build,omitempty"`
-	Start          StartConfig             `toml:"start"            yaml:"start"            json:"start,omitempty"`
-	Install        InstallConfig           `toml:"install"          yaml:"install"          json:"install,omitempty"`
-	RuntimeConfig  RuntimeCfg              `toml:"runtime_config"   yaml:"runtime_config"   json:"runtime_config,omitempty"`
-	Secrets        map[string]SecretConfig `toml:"secrets"          yaml:"secrets"          json:"secrets,omitempty"`
-	RuntimeAssets  []AssetCopy             `toml:"runtime_assets"   yaml:"runtime_assets"   json:"runtime_assets,omitempty"`
-	ExternalTools  []ExternalTool          `toml:"external_tools"   yaml:"external_tools"   json:"external_tools,omitempty"`
+	Runtime        string                      `toml:"runtime"          yaml:"runtime"          json:"runtime"`
+	Version        string                      `toml:"version"          yaml:"version"          json:"version,omitempty"`
+	PackageManager string                      `toml:"package_manager"  yaml:"package_manager"  json:"package_manager,omitempty"`
+	Dockerfile     string                      `toml:"dockerfile"       yaml:"dockerfile"       json:"dockerfile,omitempty"`
+	ContextRoot    string                      `toml:"context_root"     yaml:"context_root"     json:"context_root,omitempty"`
+	Env            map[string]PublicEnvLiteral `toml:"env"              yaml:"env"              json:"env,omitempty"`
+	Build          BuildConfig                 `toml:"build"            yaml:"build"            json:"build,omitempty"`
+	Start          StartConfig                 `toml:"start"            yaml:"start"            json:"start,omitempty"`
+	Install        InstallConfig               `toml:"install"          yaml:"install"          json:"install,omitempty"`
+	RuntimeConfig  RuntimeCfg                  `toml:"runtime_config"   yaml:"runtime_config"   json:"runtime_config,omitempty"`
+	Secrets        map[string]SecretConfig     `toml:"secrets"          yaml:"secrets"          json:"secrets,omitempty"`
+	RuntimeAssets  []AssetCopy                 `toml:"runtime_assets"   yaml:"runtime_assets"   json:"runtime_assets,omitempty"`
+	ExternalTools  []ExternalTool              `toml:"external_tools"   yaml:"external_tools"   json:"external_tools,omitempty"`
 }
 
 // Binary describes a single Go binary to build in a multi-binary project.
@@ -284,19 +288,19 @@ func LoadWithNames(dir string, names []string) (*Config, error) {
 }
 
 type rawConfig struct {
-	Runtime        string                  `toml:"runtime"         yaml:"runtime"         json:"runtime"`
-	Version        string                  `toml:"version"         yaml:"version"         json:"version,omitempty"`
-	PackageManager string                  `toml:"package_manager" yaml:"package_manager" json:"package_manager,omitempty"`
-	Dockerfile     string                  `toml:"dockerfile"      yaml:"dockerfile"      json:"dockerfile,omitempty"`
-	ContextRoot    string                  `toml:"context_root"    yaml:"context_root"    json:"context_root,omitempty"`
-	Env            map[string]string       `toml:"env"             yaml:"env"             json:"env,omitempty"`
-	Build          BuildConfig             `toml:"build"           yaml:"build"           json:"build,omitempty"`
-	Start          StartConfig             `toml:"start"           yaml:"start"           json:"start,omitempty"`
-	Install        InstallConfig           `toml:"install"         yaml:"install"         json:"install,omitempty"`
-	RuntimeConfig  rawRuntimeCfg           `toml:"runtime_config"  yaml:"runtime_config"  json:"runtime_config,omitempty"`
-	Secrets        map[string]SecretConfig `toml:"secrets"         yaml:"secrets"         json:"secrets,omitempty"`
-	RuntimeAssets  []AssetCopy             `toml:"runtime_assets"  yaml:"runtime_assets"  json:"runtime_assets,omitempty"`
-	ExternalTools  []rawExternalTool       `toml:"external_tools"  yaml:"external_tools"  json:"external_tools,omitempty"`
+	Runtime        string                      `toml:"runtime"         yaml:"runtime"         json:"runtime"`
+	Version        string                      `toml:"version"         yaml:"version"         json:"version,omitempty"`
+	PackageManager string                      `toml:"package_manager" yaml:"package_manager" json:"package_manager,omitempty"`
+	Dockerfile     string                      `toml:"dockerfile"      yaml:"dockerfile"      json:"dockerfile,omitempty"`
+	ContextRoot    string                      `toml:"context_root"    yaml:"context_root"    json:"context_root,omitempty"`
+	Env            map[string]PublicEnvLiteral `toml:"env"             yaml:"env"             json:"env,omitempty"`
+	Build          BuildConfig                 `toml:"build"           yaml:"build"           json:"build,omitempty"`
+	Start          StartConfig                 `toml:"start"           yaml:"start"           json:"start,omitempty"`
+	Install        InstallConfig               `toml:"install"         yaml:"install"         json:"install,omitempty"`
+	RuntimeConfig  rawRuntimeCfg               `toml:"runtime_config"  yaml:"runtime_config"  json:"runtime_config,omitempty"`
+	Secrets        map[string]SecretConfig     `toml:"secrets"         yaml:"secrets"         json:"secrets,omitempty"`
+	RuntimeAssets  []AssetCopy                 `toml:"runtime_assets"  yaml:"runtime_assets"  json:"runtime_assets,omitempty"`
+	ExternalTools  []rawExternalTool           `toml:"external_tools"  yaml:"external_tools"  json:"external_tools,omitempty"`
 }
 
 // ParseConfig parses raw config data based on the file extension in name.
@@ -413,6 +417,12 @@ func normalizeExternalTools(raws []rawExternalTool) ([]ExternalTool, error) {
 
 // Validate checks that the config has required fields and valid values.
 func (c *Config) Validate() error {
+	if err := c.validateEnv(); err != nil {
+		return err
+	}
+	if err := c.validateSecrets(); err != nil {
+		return err
+	}
 	if c.Dockerfile != "" {
 		return nil
 	}
@@ -437,10 +447,49 @@ func (c *Config) Validate() error {
 	if err := c.validateRuntimeAssets(); err != nil {
 		return err
 	}
-	if err := c.validateSecrets(); err != nil {
-		return err
-	}
 	return c.validateExternalTools()
+}
+
+var reEnvName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+var sensitiveEnvNameFragments = []string{
+	"ACCESS_TOKEN",
+	"API_KEY",
+	"AUTH_TOKEN",
+	"CREDENTIAL",
+	"DATABASE_URL",
+	"DB_URL",
+	"DSN",
+	"PASSWORD",
+	"PASSWD",
+	"PRIVATE_KEY",
+	"SECRET",
+	"TOKEN",
+}
+
+// IsSensitiveEnvName reports whether an environment variable name is likely to
+// carry secret material. Such names must be represented through [secrets], not
+// as public literal values in [env].
+func IsSensitiveEnvName(name string) bool {
+	upper := strings.ToUpper(name)
+	for _, frag := range sensitiveEnvNameFragments {
+		if upper == frag || strings.Contains(upper, "_"+frag) || strings.Contains(upper, frag+"_") {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Config) validateEnv() error {
+	for key := range c.Env {
+		if !reEnvName.MatchString(key) {
+			return fmt.Errorf("env.%s: key must match ^[A-Za-z_][A-Za-z0-9_]*$", key)
+		}
+		if IsSensitiveEnvName(key) {
+			return fmt.Errorf("env.%s: sensitive-looking environment names must be declared under [secrets], not [env]", key)
+		}
+	}
+	return nil
 }
 
 var ldflagsKeyRE = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_./]*$`)
@@ -545,6 +594,9 @@ func (c *Config) validateSecrets() error {
 		}
 		if sec.Target != "" && strings.Contains(sec.Target, "..") {
 			return fmt.Errorf("secrets.%s: target path must not contain '..'", id)
+		}
+		if sec.Env != "" && !reEnvName.MatchString(sec.Env) {
+			return fmt.Errorf("secrets.%s.env %q: must match ^[A-Za-z_][A-Za-z0-9_]*$", id, sec.Env)
 		}
 	}
 	return nil
