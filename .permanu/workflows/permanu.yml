@@ -1,0 +1,143 @@
+name: Docksmith Permanu CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  version_guard:
+    name: Version Guard
+    runs-on: self-hosted
+    steps:
+      - name: Verify repository checkout and release bump path
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f go.mod
+          test -f .goreleaser.yml
+          grep -q '^module github.com/permanu/docksmith$' go.mod
+          git fetch --tags --force
+          head_sha=$(git rev-parse HEAD)
+          latest_tag=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+          latest_sha=$(git rev-list -n 1 "$latest_tag")
+          echo "HEAD=$head_sha"
+          echo "latest_tag=$latest_tag"
+          echo "latest_tag_sha=$latest_sha"
+          next=$(awk -v v="${latest_tag#v}" 'BEGIN { split(v, p, "."); printf "v%d.%d.%d", p[1], p[2], p[3] + 1 }')
+          if git rev-parse "$next" >/dev/null 2>&1; then
+            echo "next release tag $next already exists"
+            exit 1
+          fi
+          printf '%s\n' "$next" > .permanu-next-version
+          echo "next_release=$next"
+          if [ "$head_sha" = "$latest_sha" ]; then
+            echo "HEAD is currently tagged $latest_tag; release bump candidate is $next."
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docksmith-version-guard
+          path: .permanu-next-version
+
+  go_quality:
+    name: Go Quality
+    runs-on: self-hosted
+    needs: [version_guard]
+    steps:
+      - name: Go toolchain guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          go version
+          required=$(awk '/^go / {print $2}' go.mod)
+          actual=$(go env GOVERSION | sed 's/^go//')
+          echo "required_go=$required"
+          echo "actual_go=$actual"
+          awk -v actual="$actual" -v required="$required" 'BEGIN { split(actual,a,"."); split(required,r,"."); if ((a[1] < r[1]) || (a[1] == r[1] && a[2] < r[2])) exit 1 }'
+      - name: Dependency download
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod tidy
+          if ! git diff --exit-code -- go.mod go.sum; then
+            echo "go.mod/go.sum changed after go mod tidy; commit the module graph before CI can release."
+            exit 1
+          fi
+          go mod download all
+      - name: Build
+        run: GOFLAGS=-mod=readonly go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Format guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed=$(gofmt -l .)
+          if [ -n "$changed" ]; then
+            echo "Files need gofmt:"
+            echo "$changed"
+            exit 1
+          fi
+      - name: Race tests with coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          go list ./... | grep -v '^github.com/permanu/docksmith/examples/' | xargs go test -race -count=1 -coverprofile=cover.out
+          total=$(go tool cover -func=cover.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')
+          echo "Coverage: ${total}%"
+          awk -v total="$total" 'BEGIN { if (total < 40) exit 1 }'
+      - name: Vulnerability scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docksmith-coverage
+          path: cover.out
+
+  release_readiness:
+    name: Release Readiness
+    runs-on: self-hosted
+    needs: [go_quality]
+    steps:
+      - name: Validate GoReleaser config
+        shell: bash
+        run: |
+          set -euo pipefail
+          go run github.com/goreleaser/goreleaser/v2@latest check
+      - name: Build release artifact set
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          version=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+          mkdir -p dist
+          for os in linux darwin windows; do
+            for arch in amd64 arm64; do
+              out="dist/docksmith_${os}_${arch}"
+              bin="docksmith"
+              if [ "$os" = windows ]; then bin="docksmith.exe"; fi
+              tmp="$(mktemp -d)"
+              GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${version} -X main.commit=$(git rev-parse --short HEAD)" -o "$tmp/$bin" ./cmd/docksmith
+              if [ "$os" = windows ]; then
+                (cd "$tmp" && zip -q "../docksmith_${os}_${arch}.zip" "$bin")
+                mv "$tmp/../docksmith_${os}_${arch}.zip" "${out}.zip"
+              else
+                tar -C "$tmp" -czf "${out}.tar.gz" "$bin"
+              fi
+              rm -rf "$tmp"
+            done
+          done
+          (cd dist && shasum -a 256 * > checksums.txt)
+          ls -lah dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docksmith-release-artifacts
+          path: dist/
