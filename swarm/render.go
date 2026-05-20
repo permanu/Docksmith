@@ -11,6 +11,8 @@ import (
 const maxComposeNameLength = 63
 
 var composeNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$`)
+var envKeyRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+var labelKeyRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*(/[A-Za-z0-9][A-Za-z0-9_.-]*)?$`)
 
 // RenderStack validates and renders spec as deterministic Docker Swarm stack
 // YAML suitable for docker stack deploy.
@@ -54,6 +56,16 @@ func Validate(spec Stack) error {
 		}
 		if svc.Stateful && replicas > 1 && !svc.StatefulReplicasSafe {
 			return fmt.Errorf("%w: service %q requests %d replicas", ErrUnsupportedStatefulScale, svc.Name, replicas)
+		}
+		for key := range svc.Environment {
+			if err := validateEnvironmentKey(svc.Name, key); err != nil {
+				return err
+			}
+		}
+		for key := range svc.Labels {
+			if err := validateLabelKey(svc.Name, key); err != nil {
+				return err
+			}
 		}
 		for _, secret := range svc.Secrets {
 			if err := validateComposeName("service "+svc.Name+" secret source", secret.Source); err != nil {
@@ -191,6 +203,20 @@ func validateComposeName(kind, name string) error {
 	}
 	if len(name) > maxComposeNameLength || !composeNameRE.MatchString(name) {
 		return fmt.Errorf("%w: %s name %q must match %s and be at most %d characters", ErrInvalidSpec, kind, name, composeNameRE.String(), maxComposeNameLength)
+	}
+	return nil
+}
+
+func validateEnvironmentKey(service, key string) error {
+	if !envKeyRE.MatchString(key) {
+		return fmt.Errorf("%w: service %q environment key %q must match %s", ErrInvalidSpec, service, key, envKeyRE.String())
+	}
+	return nil
+}
+
+func validateLabelKey(service, key string) error {
+	if len(key) > 253 || !labelKeyRE.MatchString(key) {
+		return fmt.Errorf("%w: service %q label key %q must be a Docker label key", ErrInvalidSpec, service, key)
 	}
 	return nil
 }

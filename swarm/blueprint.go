@@ -140,6 +140,10 @@ func envMap(env []blueprint.Env) map[string]string {
 	for _, e := range env {
 		if e.ValueFrom == "" {
 			out[e.Name] = e.Value
+			continue
+		}
+		if secretName, ok := secretValueFromName(e.ValueFrom); ok {
+			out[e.Name+"_FILE"] = "/run/secrets/" + secretName
 		}
 	}
 	return out

@@ -226,6 +226,52 @@ func TestValidateRejectsInvalidComposeNames(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsUnsafeEnvironmentAndLabelKeys(t *testing.T) {
+	tests := []struct {
+		name string
+		svc  Service
+	}{
+		{
+			name: "environment yaml injection",
+			svc: Service{
+				Name:  "api",
+				Image: "api:latest",
+				Environment: map[string]string{
+					"GOOD:\n    privileged": "true",
+				},
+			},
+		},
+		{
+			name: "environment not posix",
+			svc: Service{
+				Name:  "api",
+				Image: "api:latest",
+				Environment: map[string]string{
+					"1BAD": "value",
+				},
+			},
+		},
+		{
+			name: "label yaml injection",
+			svc: Service{
+				Name:  "api",
+				Image: "api:latest",
+				Labels: map[string]string{
+					"com.example.bad:\n    privileged": "true",
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := RenderStack(Stack{Services: []Service{tt.svc}})
+			if !errors.Is(err, ErrInvalidSpec) {
+				t.Fatalf("expected ErrInvalidSpec, got %v", err)
+			}
+		})
+	}
+}
+
 func TestValidateRejectsMissingServiceSecretDeclaration(t *testing.T) {
 	_, err := RenderStack(Stack{
 		Services: []Service{{
@@ -280,6 +326,7 @@ services:
   api:
     image: "api:v1"
     environment:
+      API_TOKEN_FILE: "/run/secrets/api_token"
       LOG_LEVEL: "info"
     secrets:
       - source: "api_token"
@@ -294,7 +341,7 @@ secrets:
 	if got != want {
 		t.Fatalf("unexpected yaml\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
-	if strings.Contains(got, "API_TOKEN") {
+	if strings.Contains(got, "API_TOKEN:") {
 		t.Fatalf("secret env name was injected into environment:\n%s", got)
 	}
 }

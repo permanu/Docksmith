@@ -1,6 +1,7 @@
 # Local
 .claude/
 .local/
+local/
 CLAUDE.md
 
 # Go

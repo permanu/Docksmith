@@ -26,7 +26,7 @@ func EmitDockerfile(plan *core.BuildPlan) string {
 // so buildkit layer caching stays stable across unrelated manifest changes).
 // Passing nil is equivalent to EmitDockerfile.
 func EmitDockerfileWithManifest(plan *core.BuildPlan, m *core.BuildManifest) string {
-	if len(plan.Stages) == 0 {
+	if plan == nil || len(plan.Stages) == 0 {
 		slog.Warn("EmitDockerfile called with empty build plan")
 		return ""
 	}

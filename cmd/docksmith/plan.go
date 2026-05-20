@@ -21,7 +21,13 @@ func runPlan(cfg config, args []string) {
 		os.Exit(0)
 	}
 
-	plan, err := docksmith.Plan(fw)
+	opts, err := docksmith.LoadPlanOptions(dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	plan, err := docksmith.Plan(fw, opts...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(2)

@@ -40,6 +40,10 @@ func runInit(_ config, args []string) {
 // buildTOMLTemplate generates a commented docksmith.toml pre-filled with
 // values inferred from the detected framework.
 func buildTOMLTemplate(fw *docksmith.Framework) string {
+	if fw == nil {
+		fw = &docksmith.Framework{}
+	}
+
 	runtime := frameworkToRuntime(fw.Name)
 	version := frameworkVersion(fw)
 	build := fw.BuildCommand

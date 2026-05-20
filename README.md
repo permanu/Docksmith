@@ -4,7 +4,7 @@ module: github.com/permanu/docksmith
 language: go
 go-version: ">=1.26"
 license: MPL-2.0
-dependencies: 2
+dependencies: 5 direct external modules
 runtimes: 12
 detectors: 45
 architecture: detect-plan-emit
@@ -14,7 +14,7 @@ status: pre-release
 
 # Docksmith
 
-Go library and CLI that detects your framework and generates a hardened, multi-stage Dockerfile. Two dependencies. No lock-in.
+Go library and CLI that detects your framework and generates a hardened, multi-stage Dockerfile. Small dependency surface. No lock-in.
 
 ## At a glance
 
@@ -23,7 +23,7 @@ Go library and CLI that detects your framework and generates a hardened, multi-s
 | **Type** | Go library + CLI |
 | **Module** | `github.com/permanu/docksmith` |
 | **Go version** | 1.26+ |
-| **Dependencies** | 2 (BurntSushi/toml, yaml.v3) |
+| **Dependencies** | 5 direct external modules |
 | **Runtimes** | 12 (Node, Python, Go, Ruby, Rust, Java, PHP, .NET, Elixir, Deno, Bun, Static) |
 | **Detectors** | 45 built-in + static fallback |
 | **Architecture** | Detect → Plan → Emit (each independently usable) |
@@ -135,7 +135,7 @@ Three stages, each independently usable:
 2. **Plan** -- takes the detection result and builds a `BuildPlan`: which base images, which stages, what commands, plus hardening (non-root user, tini, health checks, distroless where possible, BuildKit cache mounts).
 3. **Emit** -- serializes the plan into a Dockerfile string. Standard Dockerfile syntax. No proprietary format, no runtime dependency.
 
-The entire library has two external dependencies (a TOML parser and a YAML parser). No Docker client, no container runtime, no network calls during detection or generation.
+The library keeps a small direct dependency surface: config parsing, registry digest resolution, and optional tracing. No Docker client or container runtime is needed for detection or generation.
 
 The output is a plain Dockerfile. You can commit it, modify it, or throw it away. No lock-in.
 
