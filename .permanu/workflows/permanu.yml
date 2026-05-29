@@ -1,58 +1,89 @@
 name: Docksmith Permanu CI
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: Explicit CI lane to run manually.
+        required: true
+        type: choice
+        default: pr
+        options:
+          - pr
+          - main
+          - release
+          - all
 
 permissions:
-  contents: read
+  contents: write
+  checks: write
+  statuses: write
+  pull-requests: read
+
+concurrency:
+  group: docksmith-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  version_guard:
-    name: Version Guard
+  version-guard:
+    name: permanu-ci / docksmith / version-guard
+    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && (inputs.lane == 'pr' || inputs.lane == 'main' || inputs.lane == 'release' || inputs.lane == 'all')) }}
     runs-on: self-hosted
+    timeout-minutes: 10
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Verify repository checkout and release bump path
-        shell: bash
         run: |
           set -euo pipefail
           test -f go.mod
           test -f .goreleaser.yml
           grep -q '^module github.com/permanu/docksmith$' go.mod
           git fetch --tags --force
-          head_sha=$(git rev-parse HEAD)
-          latest_tag=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
-          latest_sha=$(git rev-list -n 1 "$latest_tag")
-          echo "HEAD=$head_sha"
-          echo "latest_tag=$latest_tag"
-          echo "latest_tag_sha=$latest_sha"
-          next=$(awk -v v="${latest_tag#v}" 'BEGIN { split(v, p, "."); printf "v%d.%d.%d", p[1], p[2], p[3] + 1 }')
-          if git rev-parse "$next" >/dev/null 2>&1; then
-            echo "next release tag $next already exists"
-            exit 1
+          latest_tag=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
+          if [ -n "$latest_tag" ]; then
+            next=$(awk -v v="${latest_tag#v}" 'BEGIN { split(v, p, "."); printf "v%d.%d.%d", p[1], p[2], p[3] + 1 }')
+            if git rev-parse "$next" >/dev/null 2>&1; then
+              echo "next release tag $next already exists"
+              exit 1
+            fi
+            printf '%s\n' "$next" > .permanu-next-version
+            echo "next_release=$next"
+          else
+            printf '%s\n' "v0.1.0" > .permanu-next-version
+            echo "next_release=v0.1.0"
           fi
-          printf '%s\n' "$next" > .permanu-next-version
-          echo "next_release=$next"
-          if [ "$head_sha" = "$latest_sha" ]; then
-            echo "HEAD is currently tagged $latest_tag; release bump candidate is $next."
-          fi
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload version guard artifact
+        uses: actions/upload-artifact@v4
         with:
           name: docksmith-version-guard
           path: .permanu-next-version
+          retention-days: 14
 
-  go_quality:
-    name: Go Quality
+  go-quality:
+    name: permanu-ci / docksmith / go-quality
+    needs: [version-guard]
+    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && (inputs.lane == 'pr' || inputs.lane == 'main' || inputs.lane == 'release' || inputs.lane == 'all')) }}
     runs-on: self-hosted
-    needs: [version_guard]
-    container:
-      image: golang:1.26-bookworm
+    timeout-minutes: 30
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Go toolchain guard
-        shell: bash
         run: |
           set -euo pipefail
           go version
@@ -61,8 +92,8 @@ jobs:
           echo "required_go=$required"
           echo "actual_go=$actual"
           awk -v actual="$actual" -v required="$required" 'BEGIN { split(actual,a,"."); split(required,r,"."); if ((a[1] < r[1]) || (a[1] == r[1] && a[2] < r[2])) exit 1 }'
+
       - name: Dependency download
-        shell: bash
         run: |
           set -euo pipefail
           go mod tidy
@@ -71,12 +102,14 @@ jobs:
             exit 1
           fi
           go mod download all
+
       - name: Build
         run: GOFLAGS=-mod=readonly go build ./...
+
       - name: Vet
         run: go vet ./...
+
       - name: Format guard
-        shell: bash
         run: |
           set -euo pipefail
           changed=$(gofmt -l .)
@@ -85,51 +118,46 @@ jobs:
             echo "$changed"
             exit 1
           fi
+
       - name: Race tests with coverage
-        shell: bash
         run: |
           set -euo pipefail
           go list ./... | grep -v '^github.com/permanu/docksmith/examples/' | xargs go test -race -count=1 -coverprofile=cover.out
           total=$(go tool cover -func=cover.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')
           echo "Coverage: ${total}%"
           awk -v total="$total" 'BEGIN { if (total < 40) exit 1 }'
+
       - name: Vulnerability scan
-        shell: bash
         run: |
           set -euo pipefail
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
         with:
           name: docksmith-coverage
           path: cover.out
+          retention-days: 14
 
-  release_readiness:
-    name: Release Readiness
+  main-release-readiness:
+    name: permanu-ci / docksmith / main-release-readiness
+    needs: [go-quality]
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && (inputs.lane == 'main' || inputs.lane == 'all')) }}
     runs-on: self-hosted
-    needs: [go_quality]
-    container:
-      image: golang:1.26-bookworm
+    timeout-minutes: 30
     steps:
-      - name: Prepare release container tools
-        shell: bash
-        run: |
-          set -euo pipefail
-          if ! command -v zip >/dev/null 2>&1; then
-            apt-get update
-            apt-get install -y --no-install-recommends zip
-          fi
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Validate GoReleaser config
-        shell: bash
-        run: |
-          set -euo pipefail
-          go run github.com/goreleaser/goreleaser/v2@latest check
+        run: go run github.com/goreleaser/goreleaser/v2@latest check
+
       - name: Build release artifact set
-        shell: bash
         run: |
           set -euo pipefail
           rm -rf dist
-          version=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+          version=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || echo v0.0.0)
           mkdir -p dist
           for os in linux darwin windows; do
             for arch in amd64 arm64; do
@@ -148,8 +176,27 @@ jobs:
             done
           done
           (cd dist && sha256sum * > checksums.txt)
-          ls -lah dist
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload release preview
+        uses: actions/upload-artifact@v4
         with:
-          name: docksmith-release-artifacts
+          name: docksmith-release-preview
           path: dist/
+          retention-days: 14
+
+  github-release:
+    name: permanu-ci / docksmith / github-release
+    needs: [go-quality]
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: self-hosted
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Publish GitHub Release
+        run: |
+          set -euo pipefail
+          go run github.com/goreleaser/goreleaser/v2@latest release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
