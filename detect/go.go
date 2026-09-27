@@ -1,13 +1,14 @@
 package detect
 
 import (
-	"github.com/permanu/docksmith/core"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/permanu/docksmith/core"
 )
 
 // preferredCmdNames are common entrypoint names used to disambiguate when a
@@ -139,14 +140,38 @@ func goModuleBaseName(dir string) string {
 	return path.Base(m[1])
 }
 
-// goBuildPath resolves the build target for a Go project: "." when a root
-// main.go exists, the resolved cmd/<name> path otherwise. Returns "" when no
+// goBuildPath resolves the build target for a Go project. A cmd directory
+// whose name matches the module wins over a root main.go, which is only a
+// guessed root when the module names another service. Returns "" when no
 // main package can be determined unambiguously.
 func goBuildPath(dir string) string {
+	if named := moduleNamedCmd(dir); named != "" {
+		return named
+	}
 	if hasFile(dir, "main.go") {
 		return "."
 	}
 	return findGoMainPackage(dir)
+}
+
+// moduleNamedCmd returns ./cmd/<module> when that directory is a main package.
+func moduleNamedCmd(dir string) string {
+	mod := goModuleBaseName(dir)
+	if mod == "" {
+		return ""
+	}
+	for _, pkg := range findGoMainPackages(dir) {
+		if filepath.Base(pkg) == mod {
+			return pkg
+		}
+	}
+	return ""
+}
+
+// GoBuildTarget is the package path used to compile dir.
+// A cmd service named by the module wins over a guessed root main.go.
+func GoBuildTarget(dir string) string {
+	return goBuildPath(dir)
 }
 
 func detectGoGin(dir string) *core.Framework {
@@ -204,23 +229,15 @@ func detectGoStd(dir string) *core.Framework {
 	if !hasFile(dir, "go.mod") {
 		return nil
 	}
-	if hasFile(dir, "main.go") {
-		return &core.Framework{
-			Name:         "go",
-			BuildCommand: "go build -o app .",
-			StartCommand: "./app",
-			Port:         8080,
-			GoVersion:    detectGoVersion(dir),
-		}
+	bp := goBuildPath(dir)
+	if bp == "" {
+		return nil
 	}
-	if mainPkg := findGoMainPackage(dir); mainPkg != "" {
-		return &core.Framework{
-			Name:         "go",
-			BuildCommand: "go build -o app " + mainPkg,
-			StartCommand: "./app",
-			Port:         8080,
-			GoVersion:    detectGoVersion(dir),
-		}
+	return &core.Framework{
+		Name:         "go",
+		BuildCommand: "go build -o app " + bp,
+		StartCommand: "./app",
+		Port:         8080,
+		GoVersion:    detectGoVersion(dir),
 	}
-	return nil
 }

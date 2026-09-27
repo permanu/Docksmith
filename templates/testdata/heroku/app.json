@@ -1,0 +1,34 @@
+{
+  "name": "fixture-shop",
+  "description": "Fixture shop",
+  "env": {
+    "NODE_ENV": {
+      "value": "production"
+    },
+    "DATABASE_URL": {
+      "description": "Primary database",
+      "required": true
+    },
+    "SECRET_TOKEN": {
+      "description": "cookie signing",
+      "generator": "secret"
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 2
+    },
+    "worker": {
+      "quantity": 1
+    }
+  },
+  "addons": [
+    {
+      "plan": "heroku-postgresql:essential-0",
+      "as": "DATABASE"
+    }
+  ],
+  "scripts": {
+    "postdeploy": "npm run migrate"
+  }
+}
