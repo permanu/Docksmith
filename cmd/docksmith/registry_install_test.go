@@ -45,7 +45,8 @@ func TestInstallSuccess(t *testing.T) {
 	mux.HandleFunc("/gleam.yaml", func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprint(w, yamlContent)
 	})
-	srv = httptest.NewServer(mux)
+	srv = httptest.NewTLSServer(mux)
+	useRegistryTestClient(t, srv)
 	t.Cleanup(srv.Close)
 
 	home := t.TempDir()

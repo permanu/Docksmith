@@ -11,10 +11,6 @@ import (
 	"github.com/permanu/docksmith/registry"
 )
 
-func init() {
-	registry.SetAllowInsecureHTTP(true)
-}
-
 var testIndex = registry.Index{
 	Version: 1,
 	Frameworks: map[string]registry.Entry{
@@ -51,10 +47,11 @@ func serveIndex(t *testing.T, idx registry.Index) *httptest.Server {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(data)
 	}))
+	useRegistryTestClient(t, srv)
 	t.Cleanup(srv.Close)
 	return srv
 }
@@ -216,4 +213,11 @@ func TestRegistryFlagOverride(t *testing.T) {
 	if !strings.Contains(out.String(), "gleam") {
 		t.Error("flag URL should override env var")
 	}
+}
+
+func useRegistryTestClient(t *testing.T, server *httptest.Server) {
+	t.Helper()
+	previous := registryClient
+	registryClient = registry.NewClient(server.Client().Transport)
+	t.Cleanup(func() { registryClient = previous })
 }

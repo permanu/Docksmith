@@ -18,10 +18,6 @@ import (
 	"github.com/permanu/docksmith/registry"
 )
 
-func init() {
-	registry.SetAllowInsecureHTTP(true)
-}
-
 const testYAMLDef = `name: test-elixir
 runtime: elixir
 detect:
@@ -49,7 +45,7 @@ func serveRegistry(t *testing.T, yamlContent string) *httptest.Server {
 					Runtime:     "elixir",
 					Author:      "test",
 					SHA256:      checksum,
-					URL:         "http://" + r.Host + "/test-elixir.yaml",
+					URL:         "https://" + r.Host + "/test-elixir.yaml",
 				},
 			},
 		}
@@ -62,7 +58,7 @@ func serveRegistry(t *testing.T, yamlContent string) *httptest.Server {
 		fmt.Fprint(w, yamlContent)
 	})
 
-	return httptest.NewServer(mux)
+	return httptest.NewTLSServer(mux)
 }
 
 func withEmptyDetectors(t *testing.T) {
@@ -82,7 +78,7 @@ func TestAutoFetch_RegistryMatch(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "mix.exs"), []byte(`defmodule MyApp do end`), 0o644)
 
-	afo := AutoFetchOptions{RegistryURL: srv.URL + "/index.json"}
+	afo := AutoFetchOptions{RegistryClient: registry.NewClient(srv.Client().Transport), RegistryURL: srv.URL + "/index.json"}
 	opts := detect.DetectOptions{AutoFetch: NewAutoFetch(afo)}
 
 	fw, err := detect.DetectWithOptions(dir, opts)
@@ -103,7 +99,7 @@ func TestAutoFetch_RegistryMatch(t *testing.T) {
 func TestAutoFetch_NoRegistryMatch(t *testing.T) {
 	idx := registry.Index{Version: 1, Frameworks: map[string]registry.Entry{}}
 	data, _ := json.Marshal(idx)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write(data)
 	}))
 	defer srv.Close()
@@ -114,7 +110,7 @@ func TestAutoFetch_NoRegistryMatch(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "mix.exs"), []byte(`defmodule MyApp do end`), 0o644)
 
-	afo := AutoFetchOptions{RegistryURL: srv.URL}
+	afo := AutoFetchOptions{RegistryClient: registry.NewClient(srv.Client().Transport), RegistryURL: srv.URL}
 	opts := detect.DetectOptions{AutoFetch: NewAutoFetch(afo)}
 
 	_, err := detect.DetectWithOptions(dir, opts)
@@ -130,10 +126,10 @@ func TestAutoFetch_NetworkFailure(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "mix.exs"), []byte(`defmodule MyApp do end`), 0o644)
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	srv.Close()
 
-	afo := AutoFetchOptions{RegistryURL: srv.URL + "/index.json"}
+	afo := AutoFetchOptions{RegistryClient: registry.NewClient(srv.Client().Transport), RegistryURL: srv.URL + "/index.json"}
 	opts := detect.DetectOptions{AutoFetch: NewAutoFetch(afo)}
 
 	_, err := detect.DetectWithOptions(dir, opts)
@@ -173,7 +169,7 @@ func TestAutoFetch_AlreadyInstalled_NoReDownload(t *testing.T) {
 	os.WriteFile(filepath.Join(fwDir, "test-elixir.yaml"), []byte(testYAMLDef), 0o644)
 
 	downloadCalls := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/test-elixir.yaml" {
 			downloadCalls++
 		}
@@ -183,7 +179,7 @@ func TestAutoFetch_AlreadyInstalled_NoReDownload(t *testing.T) {
 			Frameworks: map[string]registry.Entry{
 				"test-elixir": {
 					Version: "1.0.0", Runtime: "elixir",
-					URL: "http://" + r.Host + "/test-elixir.yaml", SHA256: "abc",
+					URL: "https://" + r.Host + "/test-elixir.yaml", SHA256: "abc",
 				},
 			},
 		}
@@ -195,7 +191,7 @@ func TestAutoFetch_AlreadyInstalled_NoReDownload(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "mix.exs"), []byte(`defmodule MyApp do end`), 0o644)
 
-	afo := AutoFetchOptions{RegistryURL: srv.URL + "/index.json"}
+	afo := AutoFetchOptions{RegistryClient: registry.NewClient(srv.Client().Transport), RegistryURL: srv.URL + "/index.json"}
 	opts := detect.DetectOptions{AutoFetch: NewAutoFetch(afo)}
 
 	detect.DetectWithOptions(dir, opts)
@@ -215,7 +211,7 @@ func TestAutoFetch_InteractiveDenied(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "mix.exs"), []byte(`defmodule MyApp do end`), 0o644)
 
-	afo := AutoFetchOptions{
+	afo := AutoFetchOptions{RegistryClient: registry.NewClient(srv.Client().Transport),
 		RegistryURL: srv.URL + "/index.json",
 		Interactive: true,
 		ConfirmInstall: func(name, desc string) bool {

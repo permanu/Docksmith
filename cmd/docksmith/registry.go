@@ -13,6 +13,8 @@ import (
 	"github.com/permanu/docksmith/registry"
 )
 
+var registryClient = registry.NewClient(nil)
+
 func registryURL(flagVal string) string {
 	if flagVal != "" {
 		return flagVal
@@ -73,7 +75,7 @@ func execSearch(cfg config, url string, offline bool, args []string, out, errw i
 		query = fs.Arg(0)
 	}
 
-	idx, err := registry.FetchIndex(url, offline)
+	idx, err := registryClient.FetchIndex(url, offline)
 	if err != nil {
 		return err
 	}
@@ -129,7 +131,7 @@ func execInstall(url string, offline bool, args []string, out, errw io.Writer) e
 	}
 	name := fs.Arg(0)
 
-	idx, err := registry.FetchIndex(url, offline)
+	idx, err := registryClient.FetchIndex(url, offline)
 	if err != nil {
 		return err
 	}
@@ -149,7 +151,7 @@ func execInstall(url string, offline bool, args []string, out, errw io.Writer) e
 
 	fmt.Fprintf(errw, "Downloading %s@%s...\n", entry.Name, entry.Version)
 
-	dest, err := registry.InstallFramework(entry)
+	dest, err := registryClient.InstallFramework(entry)
 	if err != nil {
 		return err
 	}

@@ -3,7 +3,6 @@ package registry_test
 import (
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,7 +15,7 @@ func TestFetchIndex_cacheFresh(t *testing.T) {
 	cacheDir := t.TempDir()
 	t.Setenv("HOME", cacheDir)
 
-	registryURL := "http://should-not-be-called"
+	registryURL := "https://should-not-be-called"
 	cp := cachePath(cacheDir, registryURL)
 	if err := os.MkdirAll(filepath.Dir(cp), 0o755); err != nil {
 		t.Fatal(err)
@@ -25,7 +24,7 @@ func TestFetchIndex_cacheFresh(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	idx, err := registry.FetchIndex(registryURL, false)
+	idx, err := testClient.FetchIndex(registryURL, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -42,7 +41,7 @@ func TestFetchIndex_cacheStaleRefetch(t *testing.T) {
 	fresh := registry.Index{Version: 2, Frameworks: map[string]registry.Entry{
 		"newfw": {Version: "0.0.1"},
 	}}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		w.Write(marshalIndex(t, fresh))
 	}))
@@ -60,7 +59,7 @@ func TestFetchIndex_cacheStaleRefetch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	idx, err := registry.FetchIndex(srv.URL, false)
+	idx, err := testClient.FetchIndex(srv.URL, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -77,7 +76,7 @@ func TestFetchIndex_cacheCorrupt(t *testing.T) {
 	t.Setenv("HOME", cacheDir)
 
 	fresh := registry.Index{Version: 3, Frameworks: map[string]registry.Entry{}}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data, _ := json.Marshal(fresh)
 		w.Write(data)
 	}))
@@ -92,7 +91,7 @@ func TestFetchIndex_cacheCorrupt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	idx, err := registry.FetchIndex(srv.URL, false)
+	idx, err := testClient.FetchIndex(srv.URL, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -115,7 +114,7 @@ func TestFetchIndex_offlineFallbackStaleCache(t *testing.T) {
 	t.Setenv("HOME", cacheDir)
 
 	// Server that always 500s.
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
@@ -134,7 +133,7 @@ func TestFetchIndex_offlineFallbackStaleCache(t *testing.T) {
 	}
 
 	// Fetch should fall back to stale cache.
-	idx, err := registry.FetchIndex(srv.URL, false)
+	idx, err := testClient.FetchIndex(srv.URL, false)
 	if err != nil {
 		t.Fatalf("expected stale cache fallback, got error: %v", err)
 	}
@@ -146,7 +145,7 @@ func TestFetchIndex_offlineFallbackStaleCache(t *testing.T) {
 func TestFetchIndex_offlineNoCache(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
-	_, err := registry.FetchIndex("http://irrelevant", true)
+	_, err := testClient.FetchIndex("https://irrelevant", true)
 	if err == nil {
 		t.Fatal("expected error for offline with no cache")
 	}
@@ -156,7 +155,7 @@ func TestFetchIndex_offlineWithStaleCache(t *testing.T) {
 	cacheDir := t.TempDir()
 	t.Setenv("HOME", cacheDir)
 
-	registryURL := "http://wont-be-called"
+	registryURL := "https://wont-be-called"
 	cp := cachePath(cacheDir, registryURL)
 	if err := os.MkdirAll(filepath.Dir(cp), 0o755); err != nil {
 		t.Fatal(err)
@@ -170,7 +169,7 @@ func TestFetchIndex_offlineWithStaleCache(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	idx, err := registry.FetchIndex(registryURL, true)
+	idx, err := testClient.FetchIndex(registryURL, true)
 	if err != nil {
 		t.Fatalf("expected stale cache in offline mode, got: %v", err)
 	}
@@ -183,12 +182,12 @@ func TestFetchIndex_atomicCacheWrite(t *testing.T) {
 	cacheDir := t.TempDir()
 	t.Setenv("HOME", cacheDir)
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write(marshalIndex(t, sampleIndex))
 	}))
 	defer srv.Close()
 
-	_, err := registry.FetchIndex(srv.URL, false)
+	_, err := testClient.FetchIndex(srv.URL, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

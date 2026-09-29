@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,7 +14,7 @@ import (
 
 func TestInstallFramework_writesFile(t *testing.T) {
 	yamlContent := "name: gleam\nruntime: erlang\n"
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, yamlContent)
 	}))
 	defer srv.Close()
@@ -33,7 +32,7 @@ func TestInstallFramework_writesFile(t *testing.T) {
 		SHA256:  checksum,
 	}
 
-	dest, err := registry.InstallFramework(entry)
+	dest, err := testClient.InstallFramework(entry)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -53,7 +52,7 @@ func TestInstallFramework_writesFile(t *testing.T) {
 }
 
 func TestInstallFramework_sha256Mismatch(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "actual content")
 	}))
 	defer srv.Close()
@@ -66,21 +65,21 @@ func TestInstallFramework_sha256Mismatch(t *testing.T) {
 		SHA256: "0000000000000000000000000000000000000000000000000000000000000000",
 	}
 
-	_, err := registry.InstallFramework(entry)
+	_, err := testClient.InstallFramework(entry)
 	if err == nil {
 		t.Fatal("expected error for sha256 mismatch")
 	}
 }
 
 func TestInstallFramework_noURL(t *testing.T) {
-	_, err := registry.InstallFramework(registry.Entry{Name: "broken"})
+	_, err := testClient.InstallFramework(registry.Entry{Name: "broken"})
 	if err == nil {
 		t.Fatal("expected error for entry with no URL")
 	}
 }
 
 func TestInstallFramework_missingSHA256(t *testing.T) {
-	_, err := registry.InstallFramework(registry.Entry{Name: "nosha", URL: "https://example.com/fw.yaml"})
+	_, err := testClient.InstallFramework(registry.Entry{Name: "nosha", URL: "https://example.com/fw.yaml"})
 	if err == nil {
 		t.Fatal("expected error for missing sha256")
 	}
@@ -102,7 +101,7 @@ func TestInstallFramework_pathTraversal(t *testing.T) {
 				URL:    "http://example.com/fw.yaml",
 				SHA256: "abc",
 			}
-			_, err := registry.InstallFramework(entry)
+			_, err := testClient.InstallFramework(entry)
 			if err == nil {
 				t.Errorf("expected error for malicious name %q", name)
 			}
@@ -111,8 +110,6 @@ func TestInstallFramework_pathTraversal(t *testing.T) {
 }
 
 func TestInstallFramework_rejectsHTTP(t *testing.T) {
-	registry.SetAllowInsecureHTTP(false)
-	defer registry.SetAllowInsecureHTTP(true)
 
 	t.Setenv("HOME", t.TempDir())
 
@@ -121,7 +118,7 @@ func TestInstallFramework_rejectsHTTP(t *testing.T) {
 		URL:    "http://example.com/evil.yaml",
 		SHA256: "abc",
 	}
-	_, err := registry.InstallFramework(entry)
+	_, err := testClient.InstallFramework(entry)
 	if err == nil {
 		t.Fatal("expected error for non-HTTPS download URL")
 	}

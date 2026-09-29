@@ -48,8 +48,8 @@ func loadCachedIndex(path string) (idx *Index, fresh bool) {
 
 // fetchAndCache downloads the index and writes it to the cache atomically.
 // If the fetch fails and a stale cache exists, returns the stale data.
-func fetchAndCache(url, cachePath string) (*Index, error) {
-	data, err := fetchURL(url)
+func (client *Client) fetchAndCache(url, cachePath string) (*Index, error) {
+	data, err := client.fetchURL(url)
 	if err != nil {
 		// Offline fallback: if stale cache exists, use it.
 		if stale, _ := loadCachedIndex(cachePath); stale != nil {

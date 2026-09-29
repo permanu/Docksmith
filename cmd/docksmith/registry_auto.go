@@ -13,7 +13,7 @@ import (
 // detection falls back to "static". With autoInstall it downloads and
 // re-detects; otherwise it prints a hint and returns the original fw.
 func maybeRegistryInstall(fw *docksmith.Framework, dir string, autoInstall, quiet bool) *docksmith.Framework {
-	idx, err := registry.FetchIndex(registry.DefaultRegistryURL, false)
+	idx, err := registryClient.FetchIndex(registry.DefaultRegistryURL, false)
 	if err != nil {
 		return fw
 	}
@@ -37,7 +37,7 @@ func maybeRegistryInstall(fw *docksmith.Framework, dir string, autoInstall, quie
 	}
 
 	fmt.Fprintf(os.Stderr, "Downloading %s@%s...\n", match.Name, match.Version)
-	dest, err := registry.InstallFramework(match)
+	dest, err := registryClient.InstallFramework(match)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warn: auto-install failed: %v\n", err)
 		return fw

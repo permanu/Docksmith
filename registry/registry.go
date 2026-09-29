@@ -8,20 +8,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync/atomic"
 )
 
 const DefaultRegistryURL = "https://raw.githubusercontent.com/permanu/docksmith-registry/main/index.json"
-
-// allowInsecureHTTP is a test-only hook to permit http:// URLs in unit tests.
-// Production code must never enable this.
-var allowInsecureHTTP atomic.Bool
-
-// SetAllowInsecureHTTP enables or disables the test-only insecure HTTP hook.
-// This is intended exclusively for test code using httptest servers.
-func SetAllowInsecureHTTP(v bool) { allowInsecureHTTP.Store(v) }
-
-func isInsecureHTTPAllowed() bool { return allowInsecureHTTP.Load() }
 
 // Index holds the framework registry metadata.
 type Index struct {
@@ -49,6 +38,10 @@ type Entry struct {
 // Security: TLS-only is enforced. If fetch fails and a stale cache exists,
 // returns the stale cache as offline fallback.
 func FetchIndex(registryURL string, offline bool) (*Index, error) {
+	return defaultClient.FetchIndex(registryURL, offline)
+}
+
+func (client *Client) FetchIndex(registryURL string, offline bool) (*Index, error) {
 	if err := validateScheme(registryURL); err != nil {
 		return nil, err
 	}
@@ -70,7 +63,7 @@ func FetchIndex(registryURL string, offline bool) (*Index, error) {
 		return nil, fmt.Errorf("registry: no cached index and --offline is set")
 	}
 
-	return fetchAndCache(registryURL, cachePath)
+	return client.fetchAndCache(registryURL, cachePath)
 }
 
 // Search finds entries whose name, runtime, or description contains query.
@@ -96,6 +89,10 @@ func Search(index *Index, query string) []Entry {
 // InstallFramework downloads a framework YAML to ~/.docksmith/frameworks/.
 // Verifies SHA256 checksum (required). Uses atomic temp+rename for writes.
 func InstallFramework(entry Entry) (string, error) {
+	return defaultClient.InstallFramework(entry)
+}
+
+func (client *Client) InstallFramework(entry Entry) (string, error) {
 	if entry.URL == "" {
 		return "", fmt.Errorf("install %s: entry has no URL", entry.Name)
 	}
@@ -119,7 +116,7 @@ func InstallFramework(entry Entry) (string, error) {
 		return "", fmt.Errorf("install %s: create dir: %w", safeName, err)
 	}
 
-	data, err := fetchURL(entry.URL)
+	data, err := client.fetchURL(entry.URL)
 	if err != nil {
 		return "", fmt.Errorf("install %s: fetch: %w", safeName, err)
 	}

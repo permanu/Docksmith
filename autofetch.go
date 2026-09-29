@@ -17,6 +17,7 @@ import (
 // NewAutoFetch. Pass the result as DetectOptions.AutoFetch.
 type AutoFetchOptions struct {
 	RegistryURL    string
+	RegistryClient *registry.Client
 	Interactive    bool
 	ConfirmInstall func(name, description string) bool
 }
@@ -25,6 +26,10 @@ type AutoFetchOptions struct {
 // It searches the community registry, installs a matching framework, reloads
 // YAML defs, and re-detects. Returns (nil, nil) on miss or network failure.
 func NewAutoFetch(afo AutoFetchOptions) func(dir string) (*core.Framework, error) {
+	client := afo.RegistryClient
+	if client == nil {
+		client = registry.NewClient(nil)
+	}
 	return func(dir string) (*core.Framework, error) {
 		query := detect.SearchQueryFromDir(dir)
 		if query == "" {
@@ -33,7 +38,7 @@ func NewAutoFetch(afo AutoFetchOptions) func(dir string) (*core.Framework, error
 
 		url := cmp.Or(afo.RegistryURL, registry.DefaultRegistryURL)
 
-		idx, err := registry.FetchIndex(url, false)
+		idx, err := client.FetchIndex(url, false)
 		if err != nil {
 			slog.Debug("registry fetch failed, falling back", "err", err)
 			return nil, nil
@@ -56,7 +61,7 @@ func NewAutoFetch(afo AutoFetchOptions) func(dir string) (*core.Framework, error
 			}
 		}
 
-		destPath, err := registry.InstallFramework(entry)
+		destPath, err := client.InstallFramework(entry)
 		if err != nil {
 			slog.Debug("registry install failed, falling back", "err", err)
 			return nil, nil

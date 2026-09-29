@@ -12,8 +12,15 @@ import (
 	"github.com/permanu/docksmith/registry"
 )
 
-func init() {
-	registry.SetAllowInsecureHTTP(true)
+var testClient = registry.NewClient(nil)
+
+func newTestServer(t *testing.T, handler http.Handler) *httptest.Server {
+	t.Helper()
+	server := httptest.NewTLSServer(handler)
+	previous := testClient
+	testClient = registry.NewClient(server.Client().Transport)
+	t.Cleanup(func() { testClient = previous; server.Close() })
+	return server
 }
 
 var sampleIndex = registry.Index{
@@ -57,7 +64,7 @@ func cachePath(home, registryURL string) string {
 
 func TestFetchIndex_fromServer(t *testing.T) {
 	payload := marshalIndex(t, sampleIndex)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(payload)
 	}))
@@ -65,7 +72,7 @@ func TestFetchIndex_fromServer(t *testing.T) {
 
 	t.Setenv("HOME", t.TempDir())
 
-	idx, err := registry.FetchIndex(srv.URL, false)
+	idx, err := testClient.FetchIndex(srv.URL, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -78,50 +85,44 @@ func TestFetchIndex_fromServer(t *testing.T) {
 }
 
 func TestFetchIndex_rejectsHTTP(t *testing.T) {
-	registry.SetAllowInsecureHTTP(false)
-	defer registry.SetAllowInsecureHTTP(true)
 
 	t.Setenv("HOME", t.TempDir())
 
-	_, err := registry.FetchIndex("http://example.com/index.json", false)
+	_, err := testClient.FetchIndex("http://example.com/index.json", false)
 	if err == nil {
 		t.Fatal("expected error for non-HTTPS registry URL")
 	}
 }
 
 func TestFetchIndex_rejectsFTP(t *testing.T) {
-	registry.SetAllowInsecureHTTP(false)
-	defer registry.SetAllowInsecureHTTP(true)
 
 	t.Setenv("HOME", t.TempDir())
 
-	_, err := registry.FetchIndex("ftp://example.com/index.json", false)
+	_, err := testClient.FetchIndex("ftp://example.com/index.json", false)
 	if err == nil {
 		t.Fatal("expected error for ftp:// scheme")
 	}
 }
 
 func TestFetchIndex_rejectsFileScheme(t *testing.T) {
-	registry.SetAllowInsecureHTTP(false)
-	defer registry.SetAllowInsecureHTTP(true)
 
 	t.Setenv("HOME", t.TempDir())
 
-	_, err := registry.FetchIndex("file:///etc/passwd", false)
+	_, err := testClient.FetchIndex("file:///etc/passwd", false)
 	if err == nil {
 		t.Fatal("expected error for file:// scheme")
 	}
 }
 
 func TestFetchIndex_serverError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
 
 	t.Setenv("HOME", t.TempDir())
 
-	_, err := registry.FetchIndex(srv.URL, false)
+	_, err := testClient.FetchIndex(srv.URL, false)
 	if err == nil {
 		t.Fatal("expected error for server 500")
 	}
