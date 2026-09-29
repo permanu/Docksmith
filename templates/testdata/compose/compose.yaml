@@ -1,0 +1,29 @@
+name: fixture-shop
+services:
+  web:
+    image: ghcr.io/example/web:1
+    working_dir: /app
+    command: ["npm", "start"]
+    ports:
+      - "8080:3000"
+    environment:
+      NODE_ENV: production
+      API_TOKEN: literal-secret-value
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    deploy:
+      replicas: 2
+  db:
+    image: postgres:16
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: literal-secret-value
+volumes:
+  pgdata: {}

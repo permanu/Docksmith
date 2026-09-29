@@ -2,8 +2,10 @@ package yamldef
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/permanu/docksmith/core"
+	"github.com/permanu/docksmith/detect"
 	"github.com/permanu/docksmith/plan"
 )
 
@@ -121,6 +123,10 @@ func BuildPlanFromDefDir(def *FrameworkDef, dir string) (*core.BuildPlan, error)
 
 	version := ResolveVersion(def, dir)
 	pm := ResolvePM(def, dir)
+	buildCommand := def.Defaults.Build
+	if def.Runtime == "go" {
+		buildCommand = namedGoBuildCommand(buildCommand, detect.GoBuildTarget(dir))
+	}
 
 	vars := map[string]string{
 		"{{runtime}}":         def.Runtime,
@@ -128,7 +134,7 @@ func BuildPlanFromDefDir(def *FrameworkDef, dir string) (*core.BuildPlan, error)
 		"{{pm}}":              pm,
 		"{{lockfile}}":        PMLockfileName(pm),
 		"{{install_command}}": ResolveInstallCommand(def, pm),
-		"{{build_command}}":   def.Defaults.Build,
+		"{{build_command}}":   buildCommand,
 		"{{start_command}}":   def.Defaults.Start,
 		"{{port}}":            fmt.Sprintf("%d", def.Plan.Port),
 	}
@@ -238,4 +244,18 @@ func resolveStep(sd StepDef, vars map[string]string) (core.Step, error) {
 		}, nil
 	}
 	return core.Step{}, fmt.Errorf("empty or malformed step definition")
+}
+
+const rootGoBuild = "go build -o app ."
+
+// namedGoBuildCommand replaces a guessed root build with the module-named
+// service. Commands that already name a package are left alone.
+func namedGoBuildCommand(defaultCmd, target string) string {
+	if target == "" || target == "." {
+		return defaultCmd
+	}
+	if defaultCmd == "" || defaultCmd == rootGoBuild || strings.HasSuffix(defaultCmd, " .") {
+		return "go build -o app " + target
+	}
+	return defaultCmd
 }

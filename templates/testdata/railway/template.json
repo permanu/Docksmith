@@ -1,0 +1,49 @@
+{
+  "name": "fixture-shop",
+  "services": {
+    "svc-web": {
+      "name": "web",
+      "source": {
+        "repo": "acme/fixture-monorepo",
+        "rootDirectory": "apps/web"
+      },
+      "build": {
+        "buildCommand": "npm run build"
+      },
+      "deploy": {
+        "startCommand": "npm start",
+        "healthcheckPath": "/healthz",
+        "numReplicas": 2
+      },
+      "variables": {
+        "NODE_ENV": {
+          "defaultValue": "production"
+        },
+        "PORT": {
+          "defaultValue": "3000"
+        },
+        "DATABASE_URL": {
+          "isOptional": false,
+          "defaultValue": "${{Postgres.DATABASE_URL}}"
+        }
+      },
+      "domains": [
+        {
+          "serviceDomain": true,
+          "targetPort": 3000
+        }
+      ]
+    },
+    "svc-pg": {
+      "name": "Postgres",
+      "source": {
+        "image": "postgres:16"
+      },
+      "volumeMounts": {
+        "vol-pg": {
+          "mountPath": "/var/lib/postgresql/data"
+        }
+      }
+    }
+  }
+}
